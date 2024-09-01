@@ -1,0 +1,57 @@
+@startuml
+class WebcamController {
+  +start_stream()
+  +stop_stream()
+  +capture_frame() : Frame
+  +save_video_snippet(start_time, end_time) : void
+}
+
+class ObjectDetection {
+  +detect_objects(frame: Frame) : List[DetectedObject]
+  +is_object_detected(detected_objects: List[DetectedObject]) : bool
+}
+
+class VideoBuffer {
+  +store_frame(frame: Frame) : void
+  +retrieve_snippet(pre_time, post_time) : VideoSnippet
+}
+
+class DataStorage {
+  +store_snippet(snippet: VideoSnippet) : void
+  +store_metadata(metadata: ObjectMetadata) : void
+  +transfer_data_to_server() : void
+}
+
+class DataIngestionService {
+  +receive_data(snippet: VideoSnippet, metadata: ObjectMetadata) : void
+  +store_data(snippet, metadata) : void
+}
+
+class ModelTrainingService {
+  +train_model(new_data: VideoSnippet) : void
+  +update_model() : void
+}
+
+class AnalysisService {
+  +analyze_snippet(snippet: VideoSnippet) : ObjectAnalysis
+  +generate_report(analysis: ObjectAnalysis) : void
+}
+
+class DatabaseService {
+  +store_metadata(metadata: ObjectMetadata) : void
+  +store_embeddings(embeddings: Embeddings) : void
+  +query_metadata(query_params: QueryParams) : List[ObjectMetadata]
+  +query_embeddings(query_vector: QueryVector) : List[Embeddings]
+}
+
+WebcamController --> ObjectDetection
+ObjectDetection --> VideoBuffer
+VideoBuffer --> DataStorage
+DataStorage --> DataIngestionService
+
+DataIngestionService --> ModelTrainingService
+DataIngestionService --> AnalysisService
+AnalysisService --> DatabaseService
+ModelTrainingService --> DatabaseService
+@enduml
+f

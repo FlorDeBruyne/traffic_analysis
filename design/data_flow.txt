@@ -1,0 +1,21 @@
+@startuml
+actor User
+
+package "Raspberry Pi 5" {
+   [Webcam] --> [Video Stream Capture]
+   [Video Stream Capture] --> [Object Detection Module]
+   [Object Detection Module] --> [Video Snippet Capture]
+   [Video Snippet Capture] --> [Local Data Storage]
+   [Local Data Storage] --> [Data Transfer Service]
+}
+
+package "Server" {
+   [Data Transfer Service] --> [Data Ingestion]
+   [Data Ingestion] --> [Data Storage]
+   [Data Storage] --> [Model Training]
+   [Model Training] --> [Analysis Module]
+}
+
+User --> [Raspberry Pi 5]
+[Raspberry Pi 5] --> [Server]
+@enduml

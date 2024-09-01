@@ -1,0 +1,38 @@
+= SPEC-1: Webcam Data Collection and Analysis System
+:sectnums:
+:toc:
+
+== Background
+
+This system is designed to collect, process, and analyze video data captured from a webcam connected to a Raspberry Pi 5 with 8GB of RAM. The camera is positioned to monitor a street with a school on the other side, where it will continuously record video streams for object detection and behavioral analysis. The primary goals are to detect objects of interest, capture relevant video snippets, and analyze these snippets for further insights such as object type, count, speed, and timestamps.
+
+Data collected is stored temporarily on the Raspberry Pi and later transferred to a server for further processing. Initially, a pre-trained model will be used for detection, with active learning techniques applied to improve the model's performance over time.
+
+== Requirements
+
+*Must Have:*
+
+- The system must continuously capture video data from the webcam and store it temporarily on the Raspberry Pi.
+- The system must detect objects in real-time and capture video snippets that include footage from a few seconds before detection and 1.5 times that duration after detection.
+- Detected video snippets must be stored and labeled with metadata, including object type, count, speed, and timestamps.
+- Data must be periodically transferred from the Raspberry Pi to a server for further processing and model training.
+- The system must support active learning to improve the pre-trained model's performance over time.
+
+*Should Have:*
+
+- The system should implement configurable levels of data privacy and security during data storage and transfer:
+  - **Level 1:** Basic encryption for non-sensitive environments.
+  - **Level 2:** Advanced encryption with user consent management.
+  - **Level 3:** End-to-end encryption, user authentication, and compliance with regulations like GDPR.
+- The system should allow for different database types, considering the nature of the data (e.g., NoSQL for metadata and vector databases for feature embeddings).
+- The system should provide options for local and cloud-based data storage and processing.
+
+*Could Have:*
+
+- A user interface on the Raspberry Pi for configuring video capture settings and managing storage.
+- Integration with analytical tools for in-depth data analysis on the server.
+
+*Won’t Have:*
+
+- Built-in facial recognition or user identification features.
+
