@@ -31,7 +31,7 @@ class WebcamController():
         capture.set(cv.CAP_PROP_FRAME_WIDTH, int(os.getenv("FRAME_WIDTH")))
         capture.set(cv.CAP_PROP_FRAME_HEIGHT, int(os.getenv("FRAME_HEIGHT")))
         capture.set(cv.CAP_PROP_FPS, int(os.getenv("FPS")))
-        capture.set(cv.CAP_PROP_EXPOSURE, +1)
+        capture.set(cv.CAP_PROP_AUTO_EXPOSURE, 1)
 
         return capture
 
@@ -48,10 +48,12 @@ class WebcamController():
                 print("Can not retrieve a frame.")
                 break
             
+            #Detection == True if object of interest
+            #model_frames are frames with annotations of the model
+            #Objects is a list of DetectedObject instances
             detection, model_frames, objects = inf.detect(frame)
             
             if detection == True:
-                data.store_frame(frame)
                 self.buffer.append(frame) # Store frame in buffer
 
                 if not self.recording:
@@ -59,7 +61,7 @@ class WebcamController():
                     self.record_start_time = time.time()
 
                 if self.recording and (time.time() - self.record_start_time <= 2):
-                    data.store_video(frame)
+                    data.store_video(frame, objects)
                 else:
                     self.recording = False
                     self.buffer.clear()
