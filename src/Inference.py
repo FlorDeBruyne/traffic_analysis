@@ -6,7 +6,7 @@ class Inference():
 
     def __init__(self, path: str = "../models/yolov8n_ncnn_model", task: str = "detect", confidence: float = 0.9):
 
-        self.OBJECTS_OF_INTEREST = {0:"person", 1:"bicycle", 2:"car", 5:"bus", 14:"bird", 15:"cat", 16:"dog"}
+        self.OBJECTS_OF_INTEREST = {0:"person", 1:"bicycle", 2:"car", 5:"bus", 7: "truck", 14:"bird", 15:"cat", 16:"dog"}
         self.confidence = confidence
 
         if not path:

@@ -35,26 +35,23 @@ class DataService():
         path = '%s/traffic_%s.csv'% (os.getenv("OUT_DIR"), datetime.now().strftime("%d_%m_%y"))
         
         if not os.path.exists(path):
-            with open(path, 'w+'):
-                pass
+            with open(path, 'w+') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(fields)
 
         if objects:
-            for object in objects:
-                with open(path, 'a') as csvfile:
-                    writer = csv.DictWriter(csvfile, fieldnames=fields)
-                    sniffer = csv.Sniffer()
-                    
-                    if not sniffer.has_header(csvfile.read(2048)):
-                        writer.writeheader()
-                    
-                    writer.writerow({"confidence": object.conf,
-                                     "class_id": object.cls_id,
+            with open(path, 'a') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=fields)
+
+                for object in objects:                   
+                    writer.writerow({"confidence": object.conf.item(),
+                                     "class_id": object.cls_id.item(),
                                      "class_name": object.cls,
                                      "data": object.data,
-                                     "xmax": object.coordinates[0],
-                                     "ymax": object.coordinates[1],
-                                     "ymin": object.coordinates[2],
-                                     "xmin": object.coordinates[3],
+                                     "xmax": object.coordinates[0].item(),
+                                     "ymax": object.coordinates[1].item(),
+                                     "ymin": object.coordinates[2].item(),
+                                     "xmin": object.coordinates[3].item(),
                                      "time_stamp": timestamp,
                                      "filename": filename})
 
