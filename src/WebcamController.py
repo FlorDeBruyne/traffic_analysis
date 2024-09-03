@@ -19,10 +19,12 @@ class WebcamController():
 
     def __init__(self, device_id: int = 0):
         self.device_id = device_id
+        self.timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
         self.capture = self.camera_setup()
         self.buffer = deque(maxlen=30)
         self.recording = False
         self.record_start_time = None
+        
 
     def camera_setup(self):
         assert cv.VideoCapture(self.device_id), "The input source is not accesible"
@@ -31,7 +33,12 @@ class WebcamController():
         capture.set(cv.CAP_PROP_FRAME_WIDTH, int(os.getenv("FRAME_WIDTH")))
         capture.set(cv.CAP_PROP_FRAME_HEIGHT, int(os.getenv("FRAME_HEIGHT")))
         capture.set(cv.CAP_PROP_FPS, int(os.getenv("FPS")))
-        capture.set(cv.CAP_PROP_AUTO_EXPOSURE, 1)
+   
+        if int(self.timestamp.split('_')[3]) >= 18 and int(self.timestamp.split('_')[3]) <= 5:
+            capture.set(cv.CAP_PROP_EXPOSURE, +8)
+        else:
+            capture.set(cv.CAP_PROP_AUTO_EXPOSURE, 1)
+            capture.set(cv.CAP_PROP_BRIGHTNESS, -10)
 
         return capture
 
@@ -56,6 +63,7 @@ class WebcamController():
             if detection == True:
                 self.buffer.append(frame) # Store frame in buffer
 
+                #start recording
                 if not self.recording:
                     self.recording = True
                     self.record_start_time = time.time()
