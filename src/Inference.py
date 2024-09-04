@@ -22,23 +22,29 @@ class Inference():
 
         detected = False
         output = []
-        output_frames = []
+        unannotated_frame = frame
+        annotated_frame = frame
 
         for frame_results in results:
-
             for det in frame_results.boxes:
                 if det.cls.item() in self.OBJECTS_OF_INTEREST.keys() and det.conf >= self.confidence: 
                     output.append(DetectedObject(det.xyxy[0],
-                                                 det.conf, det.cls,
+                                                 det.conf,
+                                                 det.cls,
                                                  self.OBJECTS_OF_INTEREST[det.cls.item()],
                                                  det.data,
                                                  det.xywh,
                                                  frame_results.speed))
-                    
-                    output_frames.append(det)
+
+                    annotated_frame = self.annotate(frame, [self.OBJECTS_OF_INTEREST[det.cls.item()], det.xyxy[0], det.conf])
                     detected = True
 
-        return [detected, output_frames, output]
+        return [detected, unannotated_frame, annotated_frame, output]
+    
+    def annotate(self, frame, objects: list, text_color: tuple = (227, 16, 44)):
+        annotator = Annotator(frame, pil=False, line_width=2, example=objects[0])
+        annotator.box_label(box=objects[1], label=f"{objects[0]}_{(objects[2].item()):.2f}", color=text_color)
+        return annotator.result()
 
 class DetectedObject():
 

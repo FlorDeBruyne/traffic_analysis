@@ -72,9 +72,9 @@ class DataService():
         """
         Two options:
         - Transfer a certain amount of files when the required amount is reached (because of storage limitations)
-        - Every 24hs zip the folder containing the images and transfer    
+        - Every 24hs zip the folder containing the images and transfer
         """
-        self.zip_data("%s/traffic_data.zip"%os.getenv("OUT_DIR"))
+        self.zip_data("%s/traffic_data.zip"% "/home/flor/")
         pass
         # self.zip_data("/home/flor/Workspace/traffic_analysis/src")
         if len(os.listdir("%s/" % os.getenv("OUT_DIR"))) >= 4000:

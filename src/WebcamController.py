@@ -17,11 +17,13 @@ inf = Inference()
 
 class WebcamController():
 
-    def __init__(self, device_id: int = 0):
+    def __init__(self, device_id: int = 0, buffersize: int = 30):
         self.device_id = device_id
         self.timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
+        self.buffersize = buffersize
+
         self.capture = self.camera_setup()
-        self.buffer = deque(maxlen=30)
+        self.buffer = deque(maxlen=self.buffersize)
         self.recording = False
         self.record_start_time = None
         
@@ -30,6 +32,8 @@ class WebcamController():
         assert cv.VideoCapture(self.device_id), "The input source is not accesible"
         capture = cv.VideoCapture(self.device_id)
 
+        capture.set(cv.CAP_PROP_BUFFERSIZE, self.buffersize + 5)
+        # POWER LINE FREQUENCY?
         capture.set(cv.CAP_PROP_FRAME_WIDTH, int(os.getenv("FRAME_WIDTH")))
         capture.set(cv.CAP_PROP_FRAME_HEIGHT, int(os.getenv("FRAME_HEIGHT")))
         capture.set(cv.CAP_PROP_FPS, int(os.getenv("FPS")))
@@ -38,7 +42,6 @@ class WebcamController():
             capture.set(cv.CAP_PROP_EXPOSURE, +8)
         else:
             capture.set(cv.CAP_PROP_AUTO_EXPOSURE, 1)
-            capture.set(cv.CAP_PROP_BRIGHTNESS, -10)
 
         return capture
 
@@ -58,7 +61,7 @@ class WebcamController():
             #Detection == True if object of interest
             #model_frames are frames with annotations of the model
             #Objects is a list of DetectedObject instances
-            detection, model_frames, objects = inf.detect(frame)
+            detection, unaannotated_frame, annotated_frame, objects = inf.detect(frame)
             
             if detection == True:
                 self.buffer.append(frame) # Store frame in buffer
@@ -78,6 +81,8 @@ class WebcamController():
                 # Save buffered frames
                 while self.buffer:
                     data.store_video(self.buffer.popleft())
+            
+            frame = annotated_frame
 
             cv.imshow("Frame", frame)
 
