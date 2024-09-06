@@ -17,7 +17,7 @@ inf = Inference()
 
 class WebcamController():
 
-    def __init__(self, device_id: int = 0, buffersize: int = 30):
+    def __init__(self, device_id: int = 0, buffersize: int = 5):
         self.device_id = device_id
         self.timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
         self.buffersize = buffersize
@@ -61,26 +61,10 @@ class WebcamController():
             #Detection == True if object of interest
             #model_frames are frames with annotations of the model
             #Objects is a list of DetectedObject instances
-            detection, unaannotated_frame, annotated_frame, objects = inf.detect(frame)
+            detection, unannotated_frame, annotated_frame, objects = inf.detect(frame)
             
             if detection == True:
-                self.buffer.append(frame) # Store frame in buffer
-
-                #start recording
-                if not self.recording:
-                    self.recording = True
-                    self.record_start_time = time.time()
-
-                if self.recording and (time.time() - self.record_start_time <= 2):
-                    data.store_video(frame, objects)
-                else:
-                    self.recording = False
-                    self.buffer.clear()
-                
-            if self.recording:
-                # Save buffered frames
-                while self.buffer:
-                    data.store_video(self.buffer.popleft())
+                data.store_video([unannotated_frame, annotated_frame], objects)
             
             frame = annotated_frame
 

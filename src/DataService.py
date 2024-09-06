@@ -10,31 +10,27 @@ load_dotenv()
 class DataService():
 
     def __init__(self) -> None:
-        #NO NEED TO MAKE A VIDEOWRITER, WHEN FUNCTIONANLITY IS ON HOLD
-        # self.fourcc = cv.VideoWriter_fourcc(*'XVID')
-        # self.out = cv.VideoWriter(filename = f'{os.getenv("OUT_DIR")}/output_{self.timestamp}.avi',
-        #                           fourcc=self.fourcc,
-        #                           fps=int(os.getenv("FPS")),
-        #                           frameSize=(int(os.getenv("FRAME_WIDTH")), int(os.getenv("FRAME_HEIGHT"))))   
-
-        self.timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
         self.dmy = datetime.now().strftime("%d_%m_%y")
 
-    def store_frame(self, frame):
-        filename = "unannotated_%s.png" % self.timestamp
-        cv.imwrite("%s/unannotated_%s.png" % (os.getenv("OUT_DIR"), self.timestamp), frame)
+    def store_frame(self, frame: list, objects: list = None):
+        timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
+        filename = "unannotated_%s.png" % timestamp
+
+        cv.imwrite("%s/unannotated_%s.png" % (os.getenv("OUT_DIR"), timestamp), frame[0])
+        cv.imwrite("%s/annotated_%s.png" % (os.getenv("OUT_DIR"), timestamp), frame[1])
+
+
         return filename
 
-    def store_video(self, frame, objects: list = None):
-        self.transfer_to_server()
-        filename = self.store_frame(frame)
+    def store_video(self, frame: list, objects: list = None):
+        filename = self.store_frame(frame, objects)
         self.store_metadata(objects, filename)
-        #Pausing the video write till I have a better webcam 
-        # self.out.write(frame)
+        # self.transfer_to_server()
 
     def store_metadata(self, objects: list = None, filename: str = None):
         fields = ["confidence", "class_id", "class_name", "data", "xmax", "ymax", "xmin", "ymin", "boxes", "time_stamp", "filename", "speed"]
         path = '%s/traffic_%s.csv'% (os.getenv("OUT_DIR"), self.dmy)
+        timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
         
         #create the initial csv file
         if not os.path.exists(path):
@@ -57,7 +53,7 @@ class DataService():
                                      "xmin": object.coordinates[3].item(),
                                      "speed": object.speed,
                                      "boxes": object.boxes,
-                                     "time_stamp": self.timestamp,
+                                     "time_stamp": timestamp,
                                      "filename": filename})
 
 
@@ -66,7 +62,8 @@ class DataService():
             len_dir_path = len(os.getenv("OUT_DIR"))
             for root, _, files in os.walk(os.getenv("OUT_DIR")):
                 for f in files:
-                    zfile.write(os.path.join(root, f),  os.path.join(root, f)[len_dir_path:])
+                    if f.endswith(".png"):
+                        zfile.write(os.path.join(root, f),  os.path.join(root, f)[len_dir_path:])
 
     def transfer_to_server(self):
         """
@@ -74,9 +71,7 @@ class DataService():
         - Transfer a certain amount of files when the required amount is reached (because of storage limitations)
         - Every 24hs zip the folder containing the images and transfer
         """
-        self.zip_data("%s/traffic_data.zip"% "/home/flor/")
-        pass
         # self.zip_data("/home/flor/Workspace/traffic_analysis/src")
         if len(os.listdir("%s/" % os.getenv("OUT_DIR"))) >= 4000:
+            self.zip_data("%s/traffic_data.zip"% "/home/flor/")
             #Transfer the files to a remote server to train a model on.
-            pass

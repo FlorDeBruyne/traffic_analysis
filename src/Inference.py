@@ -5,7 +5,7 @@ from ultralytics.utils.plotting import Annotator
 
 class Inference():
 
-    def __init__(self, path: str = "../models/yolov8s_ncnn_model", task: str = "detect", confidence: float = 0.9):
+    def __init__(self, path: str = "../models/yolov8s_ncnn_model", task: str = "detect", confidence: float = 0.75):
 
         self.OBJECTS_OF_INTEREST = {0:"person", 1:"bicycle", 2:"car", 5:"bus", 7: "truck", 14:"bird", 15:"cat", 16:"dog"}
         self.confidence = confidence
@@ -35,15 +35,16 @@ class Inference():
                                                  det.data,
                                                  det.xywh,
                                                  frame_results.speed))
+                    
+                    annotated_frame = self.annotate(annotated_frame, [self.OBJECTS_OF_INTEREST[det.cls.item()], det.xyxy[0], det.conf])
 
-                    annotated_frame = self.annotate(frame, [self.OBJECTS_OF_INTEREST[det.cls.item()], det.xyxy[0], det.conf])
                     detected = True
 
         return [detected, unannotated_frame, annotated_frame, output]
     
-    def annotate(self, frame, objects: list, text_color: tuple = (227, 16, 44)):
+    def annotate(self, frame, objects: list, box_color: tuple = (227, 16, 44)):
         annotator = Annotator(frame, pil=False, line_width=2, example=objects[0])
-        annotator.box_label(box=objects[1], label=f"{objects[0]}_{(objects[2].item()):.2f}", color=text_color)
+        annotator.box_label(box=objects[1], label=f"{objects[0]}_{(objects[2].item()*100):.2f}", color=box_color)
         return annotator.result()
 
 class DetectedObject():
