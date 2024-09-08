@@ -5,7 +5,7 @@ from ultralytics.utils.plotting import Annotator
 
 class Inference():
 
-    def __init__(self, path: str = "../models/yolov8s_ncnn_model", task: str = "detect", confidence: float = 0.75):
+    def __init__(self, path: str = "/home/flor/Workspace/traffic_analysis/models/yolov8s_ncnn_model", task: str = "detect", confidence: float = 0.75):
 
         self.OBJECTS_OF_INTEREST = {0:"person", 1:"bicycle", 2:"car", 5:"bus", 7: "truck", 14:"bird", 15:"cat", 16:"dog"}
         self.confidence = confidence
@@ -34,7 +34,8 @@ class Inference():
                                                  self.OBJECTS_OF_INTEREST[det.cls.item()],
                                                  det.data,
                                                  det.xywh,
-                                                 frame_results.speed))
+                                                 frame_results.speed,
+                                                 model.model))
                     
                     annotated_frame = self.annotate(annotated_frame, [self.OBJECTS_OF_INTEREST[det.cls.item()], det.xyxy[0], det.conf])
 
@@ -49,7 +50,7 @@ class Inference():
 
 class DetectedObject():
 
-    def __init__(self, coordinates: list, conf: float, cls_id: int, cls:str, data: list, boxes, speed) -> None:
+    def __init__(self, coordinates: list, conf: float, cls_id: int, cls:str, data: list, boxes, speed, model) -> None:
         self.coordinates = coordinates
         self.conf = conf
         self.cls_id = cls_id
@@ -57,6 +58,7 @@ class DetectedObject():
         self.data = data
         self.boxes = boxes
         self.speed = speed
+        self.model_size = model.strip("/")[-1]
 
     def __repr__(self) -> str:
         return f"Box coordinates: {self.coordinates[0]}, {self.coordinates[1]}, {self.coordinates[2]}, {self.coordinates[3]}, \nConfidence: {self.conf}, \nClass id: {self.cls_id}, \nClass: {self.cls}"

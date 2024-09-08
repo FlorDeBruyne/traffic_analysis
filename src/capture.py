@@ -2,7 +2,7 @@
 import cv2
 import math
 import numpy as np
-from WebcamController import WebcamController
+from service.WebcamController import WebcamController
 
 webcam = WebcamController()
 

@@ -6,8 +6,8 @@ from datetime import datetime
 from collections import deque
 import time
 
-from Inference import Inference
-from DataService import DataService
+from service.Inference import Inference
+from service.DataService import DataService
 
 
 load_dotenv()
@@ -33,7 +33,6 @@ class WebcamController():
         capture = cv.VideoCapture(self.device_id)
 
         capture.set(cv.CAP_PROP_BUFFERSIZE, self.buffersize + 5)
-        # POWER LINE FREQUENCY?
         capture.set(cv.CAP_PROP_FRAME_WIDTH, int(os.getenv("FRAME_WIDTH")))
         capture.set(cv.CAP_PROP_FRAME_HEIGHT, int(os.getenv("FRAME_HEIGHT")))
         capture.set(cv.CAP_PROP_FPS, int(os.getenv("FPS")))
