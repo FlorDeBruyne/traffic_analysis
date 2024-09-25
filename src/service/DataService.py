@@ -1,12 +1,10 @@
-import os
+import os, csv, shutil, time, threading, zipfile
 from datetime import datetime
 import cv2 as cv
-import csv
 from dotenv import load_dotenv, dotenv_values
-import zipfile
-import shutil
-import time
-import subprocess
+from service.Transfer import Client
+
+client = Client()
 
 load_dotenv()
 
@@ -25,9 +23,10 @@ class DataService():
         return filename
 
     def store_video(self, frame: list, objects: list = None):
+        self.transfer_data()
         filename = self.store_frame(frame, objects)
         self.store_metadata(objects, filename)
-        # self.transfer_to_server()
+        
 
     def store_metadata(self, objects: list = None, filename: str = None):
         fields = ["confidence", "class_id", "class_name", "data", "xmax", "ymax", "xmin", "ymin", "boxes", "time_stamp", "filename", "speed", "model_size"]
@@ -82,9 +81,10 @@ class DataService():
         Transfers all .png files in the OUT_DIR directory to the server as a zip file if the size of the directory is greater than 1.5 GB.
         Transfers the csv file to the server at midnight.
         """
+        print(os.path.getsize(os.getenv("OUT_DIR")))
         if os.path.getsize(os.getenv("OUT_DIR")) >= 1.5 * 1024 * 1024 * 1024:
-            self.zip_data("%s/traffic_data.zip"% "../data")
-            subprocess.run(["scp", "/home/flor/Workspace/traffic_analysis/src/data/traffic_data.zip", os.getenv("SERVER_ADDRESS")])
-        
-        if datetime.datetime.now().hour == 0 and datetime.datetime.now().minute == 0:
-            subprocess.run(["scp", "%s/traffic_%s.csv"% os.getenv("OUT_DIR"), self.dmy, os.getenv("SERVER_ADDRESS")])
+            self.zip_data("../data/traffic_data.zip")
+            client.data_transfer("../data/traffic_data.zip")        
+
+        # if datetime.now().hour == 0 and datetime.now().minute == 0:
+        #     subprocess.run(["scp", "%s/traffic_%s.csv"% os.getenv("OUT_DIR"), self.dmy, os.getenv("SERVER_ADDRESS")])

@@ -35,7 +35,7 @@ class Inference():
                                                  det.data,
                                                  det.xywh,
                                                  frame_results.speed,
-                                                 model.model))
+                                                 self.model.model))
                     
                     annotated_frame = self.annotate(annotated_frame, [self.OBJECTS_OF_INTEREST[det.cls.item()], det.xyxy[0], det.conf])
 
@@ -58,7 +58,7 @@ class DetectedObject():
         self.data = data
         self.boxes = boxes
         self.speed = speed
-        self.model_size = model.strip("/")[-1]
+        self.model_size = model.strip
 
     def __repr__(self) -> str:
         return f"Box coordinates: {self.coordinates[0]}, {self.coordinates[1]}, {self.coordinates[2]}, {self.coordinates[3]}, \nConfidence: {self.conf}, \nClass id: {self.cls_id}, \nClass: {self.cls}"
