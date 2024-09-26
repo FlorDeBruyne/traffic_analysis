@@ -67,7 +67,7 @@ class WebcamController():
             
             frame = annotated_frame
 
-            cv.imshow("Frame", frame)
+            # cv.imshow("Frame", frame)
 
             if cv.waitKey(1) == ord('q'):
                 break

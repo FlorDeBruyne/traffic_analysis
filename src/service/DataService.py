@@ -5,32 +5,26 @@ from dotenv import load_dotenv, dotenv_values
 from service.Transfer import Client
 
 client = Client()
-
 load_dotenv()
 
 class DataService():
 
     def __init__(self) -> None:
         self.dmy = datetime.now().strftime("%d_%m_%y")
+        self.OUT_DIR = os.getenv("OUT_DIR")
 
     def store_frame(self, frame: list, objects: list = None):
         timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
         filename = "unannotated_%s.png" % timestamp
 
-        cv.imwrite("%s/unannotated_%s.png" % (os.getenv("OUT_DIR"), timestamp), frame[0])
-        cv.imwrite("%s/annotated_%s.png" % (os.getenv("OUT_DIR"), timestamp), frame[1])
+        cv.imwrite("%s/unannotated_%s.png" % (self.OUT_DIR, timestamp), frame[0])
+        cv.imwrite("%s/annotated_%s.png" % (self.OUT_DIR, timestamp), frame[1])
 
         return filename
-
-    def store_video(self, frame: list, objects: list = None):
-        self.transfer_data()
-        filename = self.store_frame(frame, objects)
-        self.store_metadata(objects, filename)
         
-
     def store_metadata(self, objects: list = None, filename: str = None):
         fields = ["confidence", "class_id", "class_name", "data", "xmax", "ymax", "xmin", "ymin", "boxes", "time_stamp", "filename", "speed", "model_size"]
-        path = '%s/traffic_%s.csv'% (os.getenv("OUT_DIR"), self.dmy)
+        path = '%s/traffic_%s.csv'% (self.OUT_DIR, self.dmy)
         timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
         
         #create the initial csv file
@@ -57,9 +51,26 @@ class DataService():
                                      "time_stamp": timestamp,
                                      "filename": filename,
                                      "model_size": object.model_size})
+                    
+    def store_video(self, frame: list, objects: list = None):
+        self.transfer_data()
+        filename = self.store_frame(frame, objects)
+        self.store_metadata(objects, filename)
 
+    def get_size(self):
+        start_path = self.OUT_DIR
+        total_size = 0
+        for dirpath, dirnames, filenames in os.walk(start_path):
+            for f in filenames:
+                fp = os.path.join(dirpath, f)
+                # skip if it is symbolic link
+                if not os.path.islink(fp):
+                    total_size += os.path.getsize(fp)
+
+        return total_size
 
     def zip_data(self, zip_path):
+        #PROBLEM: iut puts the files in zip but they aren'r removed after being put in zip
         """
         Zips all the .png files in the OUT_DIR directory into a zip file.
 
@@ -67,8 +78,8 @@ class DataService():
             zip_path (str): The path to the zip file to be created.
         """
         with zipfile.ZipFile(zip_path, mode='w') as zfile:
-            len_dir_path = len(os.getenv("OUT_DIR"))
-            for root, _, files in os.walk(os.getenv("OUT_DIR")):
+            len_dir_path = len(self.OUT_DIR)
+            for root, _, files in os.walk(self.OUT_DIR):
                 for f in files:
                     if f.endswith(".png"):
                         zfile.write(os.path.join(root, f),  os.path.join(root, f)[len_dir_path:])
@@ -81,10 +92,22 @@ class DataService():
         Transfers all .png files in the OUT_DIR directory to the server as a zip file if the size of the directory is greater than 1.5 GB.
         Transfers the csv file to the server at midnight.
         """
-        print(os.path.getsize(os.getenv("OUT_DIR")))
-        if os.path.getsize(os.getenv("OUT_DIR")) >= 1.5 * 1024 * 1024 * 1024:
-            self.zip_data("../data/traffic_data.zip")
-            client.data_transfer("../data/traffic_data.zip")        
+        size = self.get_size() #put in new thread
 
-        # if datetime.now().hour == 0 and datetime.now().minute == 0:
-        #     subprocess.run(["scp", "%s/traffic_%s.csv"% os.getenv("OUT_DIR"), self.dmy, os.getenv("SERVER_ADDRESS")])
+        if size >= 1.5 * 1024 * 1024 * 1024:
+            print("[ZIPPING] data is being zipped")
+
+            # thread = threading.Thread(target=self.zip_data, args="../data/traffic_data.zip")
+            # thread.start()
+            
+            self.zip_data("../data/traffic_data.zip") # put in new thread
+            
+            process = client.data_transfer("../data/traffic_data.zip")
+            if process:
+                print("[TRANSFER] The transfer did not work")
+                return
+            else:
+                print("[TRANSFER] The transfer did not work")
+
+        if datetime.now().hour == 0 and datetime.now().minute == 0:
+            client.data_transfer("%s/traffic_%s.csv"% self.OUT_DIR, self.dmy) # put in new thread?
