@@ -9,20 +9,38 @@ HOST = os.getenv("SERVER_ADDRESS")
 PORT = os.getenv("PORT")
 ADDR = (socket.gethostbyname(socket.gethostname()), int(PORT))
 
+def threaded(fn):
+    def wrapper(*args, **kwargs):
+        thread = threading.Thread(target=fn, args=args, kwargs=kwargs)
+        thread.start()
+        return thread
+    return wrapper
+
 class Client():
 
     def __init__(self) -> None:
-        print("[STARTING] Cient is starting\n")
+        print("[STARTING] Client is starting\n")
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_socket.connect(ADDR)
     
-    def data_transfer(self, data) -> bool:
-        self.client_socket.send(data.encode())
+    @threaded
+    def data_transfer(self, data_location) -> bool:
+        data = open(data_location, 'rb')
+        loading = data.read(2048)
 
-        if not self.client_socket.recv(2048).decode():
+        while loading:
+            self.client_socket.send(loading)
+            print("[CLIENT] Sending data")
+            loading = data.read(2048)
+        
+        self.client_socket.send(b"done")
+
+        if not self.client_socket.recv(2048):
+            print("[ERROR] Tranfer not complete, disconnecting")
             self.client_socket.close()
             return False
         
+        print("[CLIENT] Transfer complete, disconnecting")
         self.client_socket.close()
         return True
 

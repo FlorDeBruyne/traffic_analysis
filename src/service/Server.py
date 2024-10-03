@@ -13,18 +13,26 @@ print("[STARTING] Server is starting\n")
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind(ADD)
 
+
 def handle_client(conn, addr):
     print(f"[NEW CONNECTION] {addr} connected.")
 
+    file = open('traffic_data.zip', "wb")
+
     connected = True
     while connected:
-        data = conn.recv(2048).decode()
-
-        if data == "done":
+        data = conn.recv(2048)
+        print("[SERVER] Recieving data")
+        if data == b"done":
             conn.close()
+        
+        file.write(data)
+        
+    file.close()
+    print("[SERVER] Transfering file")
+    placement = open(os.path.join(SERVER_FOLDER, file), "w")
 
-        file = open(os.path.join(SERVER_FOLDER, data), "w")
-        conn.send("received".encode())
+    conn.send("received")
 
     conn.close()
 
