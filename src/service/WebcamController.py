@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime
 from collections import deque
-import time
+import time, threading
 
 from service.Inference import Inference
 from service.DataService import DataService
@@ -13,6 +13,13 @@ from service.DataService import DataService
 load_dotenv()
 data = DataService()
 inf = Inference()
+
+def threaded(fn):
+    def wrapper(*args, **kwargs):
+        thread = threading.Thread(target=fn, args=args, kwargs=kwargs)
+        thread.start()
+        return thread
+    return wrapper
 
 
 class WebcamController():
@@ -38,13 +45,13 @@ class WebcamController():
         capture.set(cv.CAP_PROP_FPS, int(os.getenv("FPS")))
    
         if int(self.timestamp.split('_')[3]) >= 18 and int(self.timestamp.split('_')[3]) <= 5:
-            capture.set(cv.CAP_PROP_EXPOSURE, +8)
+            capture.set(cv.CAP_PROP_EXPOSURE, +1)
         else:
             capture.set(cv.CAP_PROP_AUTO_EXPOSURE, 1)
 
         return capture
 
-
+    @threaded
     def stream_video(self):
         """
         Stream video from a webcam, saves and records clips when an object of intrest is detected.
@@ -67,7 +74,7 @@ class WebcamController():
             
             frame = annotated_frame
 
-            # cv.imshow("Frame", frame)
+            cv.imshow("Frame", frame)
 
             if cv.waitKey(1) == ord('q'):
                 break

@@ -21,16 +21,18 @@ def handle_client(conn, addr):
 
     connected = True
     while connected:
-        data = conn.recv(2048)
+        data = conn.recv(1024)
         print("[SERVER] Recieving data")
+
         if data == b"done":
             conn.close()
-        
+
+        print("[SERVER] Transfering file")
         file.write(data)
         
     file.close()
-    print("[SERVER] Transfering file")
-    placement = open(os.path.join(SERVER_FOLDER, file), "w")
+    # 
+    # placement = open(os.path.join(SERVER_FOLDER, file), "w")
 
     conn.send("received")
 

@@ -26,19 +26,18 @@ class Client():
     @threaded
     def data_transfer(self, data_location) -> bool:
         data = open(data_location, 'rb')
-        loading = data.read(2048)
+        loading = data.read(1024)
 
         while loading:
             self.client_socket.send(loading)
             print("[CLIENT] Sending data")
-            loading = data.read(2048)
-        
-        self.client_socket.send(b"done")
+            loading = data.read(1024)
 
-        if not self.client_socket.recv(2048):
-            print("[ERROR] Tranfer not complete, disconnecting")
-            self.client_socket.close()
-            return False
+        self.client_socket.send(b"done")
+        
+        if not self.client_socket.recv(1024):
+            print("[ERROR] Tranfer not complete, retrying")
+            self.data_transfer(data_location)
         
         print("[CLIENT] Transfer complete, disconnecting")
         self.client_socket.close()

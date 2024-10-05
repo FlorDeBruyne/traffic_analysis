@@ -20,6 +20,7 @@ class DataService():
     def __init__(self) -> None:
         self.dmy = datetime.now().strftime("%d_%m_%y")
         self.OUT_DIR = os.getenv("OUT_DIR")
+        self.ZIP_PLACE = os.getenv("ZIP_PLACE")
 
     def store_frame(self, frame: list, objects: list = None):
         timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
@@ -66,7 +67,11 @@ class DataService():
         self.store_metadata(objects, filename)
 
     def _get_size(self):
-        start_path = self.OUT_DIR
+        if os.path.exists(self.ZIP_PLACE):
+            start_path = self.ZIP_PLACE
+        else:
+            start_path = self.OUT_DIR
+
         total_size = 0
         for dirpath, dirnames, filenames in os.walk(start_path):
             for f in filenames:
@@ -79,7 +84,7 @@ class DataService():
 
     @threaded
     def _zip_data(self, zip_path) -> bool:
-        #PROBLEM: iut puts the files in zip but they aren'r removed after being put in zip
+        #PROBLEM: inputs the files in zip but they aren't removed after being put in zip
         """
         Zips all the .png files in the OUT_DIR directory into a zip file.
 
@@ -95,7 +100,6 @@ class DataService():
             return True
         return False
     
-    @threaded
     def _remove_original(self):
         for root, _, files in os.walk(self.OUT_DIR):
             for f in files:
@@ -104,7 +108,7 @@ class DataService():
 
     
             
-    def transfer_data(self):
+    def transfer_data(self, zipped=False):
         """
         Transfers data to the server.
         
@@ -112,26 +116,29 @@ class DataService():
         Transfers the csv file to the server at midnight.
         """
         size = self._get_size()
-        zipped = False
 
-        if size >= 1.5 * 1024 * 1024 * 1024:
-            print("[ZIPPING] Starting zipping")
-            zipped = self._zip_data("../data/traffic_data.zip")
-            print("[ZIPPING] Completed zipping")
+        if size >= 0.5 * 1024 * 1024:
+            print("[TRANSFER] Starting zipping")
+            zipped = self._zip_data("/home/flor/Workspace/traffic_analysis/data/traffic_data.zip")
+            print("[TRANSFER] Completed zipping")
             
             # Should wait till thread is completed before starting
-            while not zipped:
-                time.wait(1)
+        while not zipped:
+            print("waiting till zip")
+            time.sleep(1)
+        
+        if zipped:
+            # self._remove_original()
 
-            self._remove_original()
-
-            process = client.data_transfer("../data/traffic_data.zip")
+            process = client.data_transfer("/home/flor/Workspace/traffic_analysis/data/traffic_data.zip")
 
             if not process:
                 print("[TRANSFER] The transfer did not work")
                 return
             
             print("[TRANSFER] Starting the transfer process")
+        
+        print("[TRANSFER] Not to big")
 
         if datetime.now().hour == 0 and datetime.now().minute == 0:
             client.data_transfer("%s/traffic_%s.csv"% self.OUT_DIR, self.dmy)
