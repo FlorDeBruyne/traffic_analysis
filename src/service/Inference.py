@@ -23,7 +23,7 @@ class Inference():
         detected = False
         output = []
         unannotated_frame = frame
-        annotated_frame = frame
+        annotated_frame = None
 
         for frame_results in results:
             for det in frame_results.boxes:
@@ -37,10 +37,10 @@ class Inference():
                                                  frame_results.speed,
                                                  self.model.model))
                     
-                    annotated_frame = self.annotate(annotated_frame, [self.OBJECTS_OF_INTEREST[det.cls.item()], det.xyxy[0], det.conf])
+                    annotated_frame = self.annotate(unannotated_frame, [self.OBJECTS_OF_INTEREST[det.cls.item()], det.xyxy[0], det.conf])
 
                     detected = True
-
+        
         return [detected, unannotated_frame, annotated_frame, output]
     
     def annotate(self, frame, objects: list, box_color: tuple = (227, 16, 44)):

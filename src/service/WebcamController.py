@@ -45,7 +45,7 @@ class WebcamController():
         capture.set(cv.CAP_PROP_FPS, int(os.getenv("FPS")))
    
         if int(self.timestamp.split('_')[3]) >= 18 and int(self.timestamp.split('_')[3]) <= 5:
-            capture.set(cv.CAP_PROP_EXPOSURE, +1)
+            capture.set(cv.CAP_PROP_EXPOSURE, -1)
         else:
             capture.set(cv.CAP_PROP_AUTO_EXPOSURE, 1)
 
@@ -70,9 +70,10 @@ class WebcamController():
             detection, unannotated_frame, annotated_frame, objects = inf.detect(frame)
             
             if detection == True:
-                data.store_video([unannotated_frame, annotated_frame], objects)
-            
-            frame = annotated_frame
+                data.store_data([unannotated_frame, annotated_frame], objects)
+                frame = annotated_frame
+
+            frame = unannotated_frame
 
             cv.imshow("Frame", frame)
 
