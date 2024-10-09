@@ -31,6 +31,10 @@ class DataService():
     def store_data(self, frames: list, objects: list = None):
         timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
 
+        if not self.client:
+            self.client = MongoInstance("traffic_analysis")
+            self.client.select_collection("vehicle")
+
         if objects:
             for object in objects:  
 
