@@ -51,7 +51,7 @@ class WebcamController():
 
         return capture
 
-    @threaded
+    # @threaded
     def stream_video(self):
         """
         Stream video from a webcam, saves and records clips when an object of intrest is detected.
@@ -75,7 +75,7 @@ class WebcamController():
 
             frame = unannotated_frame
 
-            # cv.imshow("Frame", frame)
+            cv.imshow("Frame", frame)
 
             if cv.waitKey(1) == ord('q'):
                 break

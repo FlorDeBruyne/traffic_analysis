@@ -2,6 +2,9 @@ import numpy as np
 import cv2 as cv
 from ultralytics import YOLO
 from ultralytics.utils.plotting import Annotator
+import logging, threading
+
+logger = logging.getLogger(__name__)
 
 class Inference():
 
@@ -16,7 +19,7 @@ class Inference():
             self.model = YOLO("yolov8s_ncnn_model", task="detect")
         else:
             self.model = YOLO(path, task="detect")
-    
+
     def detect(self, frame):
         results  = self.model(frame)
 

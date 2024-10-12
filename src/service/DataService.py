@@ -1,15 +1,12 @@
-import os, csv, shutil, time, threading, zipfile
+import os, csv, time, threading, shutil, pickle, base64, logging
 from datetime import datetime
 import cv2 as cv
 from dotenv import load_dotenv, dotenv_values
 from db.MongoInstance import MongoInstance
 import numpy as np
-import shutil
-import pickle
-import base64
-
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 
 def threaded(fn):
@@ -38,14 +35,19 @@ class DataService():
         if objects:
             for object in objects:  
 
+                logger.info("starting image encoding")
                 success, buffer = cv.imencode(".png", frames[0])
+                logger.info("Image encoding complete")
 
                 if not success:
-                    print("Image encoding failed.")
+                    logger.info("Image encoding failed.")
                     continue
 
                 image_b64 = base64.b64encode(buffer).decode("utf-8")
                
+                logger.info("Transfering data")
+                start_time = time.process_time()
+
                 self.client.insert_data({
                     "confidence": object.conf.item(),
                     "class_id": object.cls_id.item(),
@@ -61,4 +63,7 @@ class DataService():
                     "time_stamp": timestamp,
                     "image":image_b64
                                      })
-    
+                
+                stop_time = time.process_time()
+                logger.info(f"Transfer complete, time {stop_time-start_time}")
+        

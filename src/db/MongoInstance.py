@@ -37,6 +37,9 @@ class MongoInstance:
     def retrieve_data(self, query):
          return self.collection.find(query)
     
+    def close(self):
+         self.client.close()
+    
             
             
 
