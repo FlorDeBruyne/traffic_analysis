@@ -1,48 +1,59 @@
 import numpy as np
 import cv2 as cv
+import logging, threading,os 
 from ultralytics import YOLO
 from ultralytics.utils.plotting import Annotator
-import logging, threading
+
+
+
 
 logger = logging.getLogger(__name__)
 
 class Inference():
 
-    def __init__(self, path: str = "/home/flor/Workspace/traffic_analysis/models/yolov8s_ncnn_model", task: str = "detect", confidence: float = 0.75):
+    def __init__(self, task: str = "segment", confidence: float = 0.75, size: str ='nano'):
 
         self.OBJECTS_OF_INTEREST = {0:"person", 1:"bicycle", 2:"car", 5:"bus", 7: "truck", 14:"bird", 15:"cat", 16:"dog"}
         self.confidence = confidence
 
-        if not path:
-            self.model = YOLO("yolov8s.pt")
-            self.model.export(format="ncnn")
-            self.model = YOLO("yolov8s_ncnn_model", task="detect")
+        if task == "segment":
+            if size == "nano":
+                self.path = os.getenv("SEG_NANO")
+            else:
+                self.path = os.getenv("SEG_SMALL")
         else:
-            self.model = YOLO(path, task="detect")
+            if size == "nano":
+                self.path = os.getenv("DET_NANO")
+            else:
+                self.path = os.getenv("DET_SMALL")
+        
+        self.model = YOLO(self.path, task=task)
 
     def detect(self, frame):
-        results  = self.model(frame)
+        results = self.model.predict(frame)
 
         detected = False
         output = []
         unannotated_frame = frame
         annotated_frame = None
 
-        for frame_results in results:
-            for det in frame_results.boxes:
-                if det.cls.item() in self.OBJECTS_OF_INTEREST.keys() and det.conf >= self.confidence: 
-                    output.append(DetectedObject(det.xyxy[0],
-                                                 det.conf,
-                                                 det.cls,
-                                                 self.OBJECTS_OF_INTEREST[det.cls.item()],
-                                                 det.data,
-                                                 det.xywh,
-                                                 frame_results.speed,
-                                                 self.model.model))
-                    
-                    annotated_frame = self.annotate(unannotated_frame, [self.OBJECTS_OF_INTEREST[det.cls.item()], det.xyxy[0], det.conf])
+        
 
-                    detected = True
+        # for frame_results in results:
+        #     for det in frame_results.boxes:
+        #         if det.cls.item() in self.OBJECTS_OF_INTEREST.keys() and det.conf >= self.confidence: 
+        #             output.append(DetectedObject(det.xyxy[0],
+        #                                          det.conf,
+        #                                          det.cls,
+        #                                          self.OBJECTS_OF_INTEREST[det.cls.item()],
+        #                                          det.data,
+        #                                          det.xywh,
+        #                                          frame_results.speed,
+        #                                          self.model.model))
+                    
+        #             annotated_frame = self.annotate(unannotated_frame, [self.OBJECTS_OF_INTEREST[det.cls.item()], det.xyxy[0], det.conf])
+
+        #             detected = True
         
         return [detected, unannotated_frame, annotated_frame, output]
     

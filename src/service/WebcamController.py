@@ -9,6 +9,7 @@ import time, threading
 from service.Inference import Inference
 from service.DataService import DataService
 
+from ultralytics import YOLO
 
 load_dotenv()
 data = DataService()
@@ -33,6 +34,8 @@ class WebcamController():
         self.buffer = deque(maxlen=self.buffersize)
         self.recording = False
         self.record_start_time = None
+        self.model = YOLO('/home/flor/Workspace/traffic_analysis/models/segmentation/yolov8n_ncnn_model', task='segment')
+        
         
 
     def camera_setup(self):
@@ -52,29 +55,74 @@ class WebcamController():
         return capture
 
     # @threaded
+    # def stream_video(self):
+    #     """
+    #     Stream video from a webcam, saves and records clips when an object of intrest is detected.
+    #     """
+        
+    #     while True:
+    #         ret, frame = self.capture.read()
+
+    #         if not ret:
+    #             print("Can not retrieve a frame.")
+    #             break
+            
+    #         #Detection == True if object of interest
+    #         #model_frames are frames with annotations of the model
+    #         #Objects is a list of DetectedObject instances
+    #         # detection, unannotated_frame, annotated_frame, objects = inf.detect(frame)
+            
+    #         # if detection == True:
+    #         #     data.store_data([unannotated_frame, annotated_frame], objects)
+    #         #     frame = annotated_frame
+
+    #         # frame = unannotated_frame
+
+    #         results = self.model(frame)
+    #         for result in results:
+    #             print("This is how a result looks like", result)
+
+    #         cv.imshow("Frame", frame)
+
+    #         if cv.waitKey(1) == ord('q'):
+    #             break
+        
+    #     self.capture.release()
+    #     cv.destroyAllWindows()
+        
     def stream_video(self):
         """
-        Stream video from a webcam, saves and records clips when an object of intrest is detected.
+        Stream video from a webcam, saves and records clips when an object of interest is detected.
         """
         
         while True:
             ret, frame = self.capture.read()
 
             if not ret:
-                print("Can not retrieve a frame.")
+                print("Cannot retrieve a frame.")
                 break
             
-            #Detection == True if object of interest
-            #model_frames are frames with annotations of the model
-            #Objects is a list of DetectedObject instances
-            detection, unannotated_frame, annotated_frame, objects = inf.detect(frame)
+            # Run segmentation inference on the frame
+            results = self.model(frame)
             
-            if detection == True:
-                data.store_data([unannotated_frame, annotated_frame], objects)
-                frame = annotated_frame
+            # Process each result (for each frame)
+            for result in results:
+                # Extracting bounding boxes, masks, and class ids from the result
+                boxes = result.boxes  # Bounding boxes
+                masks = result.masks  # Segmentation masks
+                classes = result.names  # Class names for the detected objects
+                
+                print(f"Detected boxes: {boxes}")
+                print(f"Detected masks: {masks}")
+                print(f"Detected classes: {classes}")
 
-            frame = unannotated_frame
+                # Overlay the masks on the frame if needed
+                if masks is not None:
+                    for mask in masks:
+                        # Assuming 'mask' is in the format you can overlay (2D binary mask)
+                        frame[mask] = [0, 255, 0]  # Color mask area green
 
+            # Display the frame with overlays
             cv.imshow("Frame", frame)
 
             if cv.waitKey(1) == ord('q'):
@@ -83,4 +131,3 @@ class WebcamController():
         self.capture.release()
         cv.destroyAllWindows()
         
-    
