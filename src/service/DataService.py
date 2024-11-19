@@ -48,6 +48,8 @@ class DataService():
                 logger.info("Transfering data")
                 start_time = time.process_time()
 
+                # Needs more data: metadata (model size, type, inference type with speed), segmentation (map50,75,95)
+
                 self.client.insert_data({
                     "confidence": object.conf.item(),
                     "class_id": object.cls_id.item(),
@@ -61,7 +63,9 @@ class DataService():
                     "boxes": object.boxes.tolist(),
                     "dmy": self.dmy,
                     "time_stamp": timestamp,
-                    "image":image_b64
+                    "image":image_b64,
+                    'keypoints':object.keypoints,
+                    "masks": object.masks
                                      })
                 
                 stop_time = time.process_time()
