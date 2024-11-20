@@ -10,8 +10,7 @@ from ultralytics.utils.plotting import Annotator
 logger = logging.getLogger(__name__)
 
 class Inference():
-
-    def __init__(self, task: str = "segment", confidence: float = 0.75, size: str ='nano'):
+    def __init__(self, task: str = "segment", confidence: float = 0.7, size: str ='nano'):
 
         self.OBJECTS_OF_INTEREST = os.getenv("OBJECTS_INTREST")
         self.confidence = confidence
@@ -40,6 +39,13 @@ class Inference():
 
         for frame_results in results:
             # print(f"This is a frame result:{frame_results} in results")
+            logger.info(f"This is a frame_results in results: {frame_results}\n")
+            
+            logger.info(f"This is a boxes from frame_results: {frame_results.boxes}")
+            
+            
+            logger.info(f"This is a masks from frame_results: {frame_results.masks}")
+            
             if frame_results.masks != None:
                 output.append([frame_results.boxes,
                                 frame_results.keypoints,
@@ -48,17 +54,16 @@ class Inference():
                                 frame_results.orig_img,
                                 frame_results.probs,
                                 frame_results.speed])
-                
-            
-            # metrics = model.val()  # no arguments needed, dataset and settings remembered
-            # metrics.box.map  # map50-95(B)
-            # metrics.box.map50  # map50(B)
-            # metrics.box.map75  # map75(B)
-            # metrics.box.maps  # a list contains map50-95(B) of each category
-            # metrics.seg.map  # map50-95(M)
-            # metrics.seg.map50  # map50(M)
-            # metrics.seg.map75  # map75(M)
-            # metrics.seg.maps  # a list contains map50-95(M) of each category
+
+            # Boxes attributes:
+            # cls
+            # conf
+            # id ????
+            # xywh
+            # xywhn
+            # xyxy
+            # xyxyn
+
 
 
                 # if det.cls.item() in self.OBJECTS_OF_INTEREST.keys() and det.conf >= self.confidence: 
@@ -82,6 +87,9 @@ class Inference():
         annotator = Annotator(frame, pil=False, line_width=2, example=objects[0])
         annotator.box_label(box=objects[1], label=f"{objects[0]}_{(objects[2].item()*100):.2f}", color=box_color)
         return annotator.result()
+
+    def face_blurring(self, frame, mask):
+        pass
 
 # class DetectedObject():
 

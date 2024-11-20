@@ -48,7 +48,14 @@ class DataService():
                 logger.info("Transfering data")
                 start_time = time.process_time()
 
-                # Needs more data: metadata (model size, type, inference type with speed), segmentation (map50,75,95)
+                # Needs more data: metadata (model_id, model size, type, inference type with speed),
+                # segmentation (map50,75,95), isTrained = False when added to db
+                # Make a split attribute -> [train, test, val] automatically make a entry either of these
+
+                # 20% of images should be Test, 10% of images Validation and 70% of images will be Train split
+                # This can be done through the len of the output
+
+                # Make a other db for the evaluation entries of models, connected through model_id
 
                 self.client.insert_data({
                     "confidence": object.conf.item(),
