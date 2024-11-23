@@ -1,18 +1,14 @@
-import numpy as np
-import cv2 as cv
-import logging, threading,os 
+import logging, os, ast
 from ultralytics import YOLO
 from ultralytics.utils.plotting import Annotator
-
-
 
 
 logger = logging.getLogger(__name__)
 
 class Inference():
-    def __init__(self, task: str = "segment", confidence: float = 0.7, size: str ='nano'):
+    def __init__(self, task: str = "detect", confidence: float = 0.7, size: str ='nano'):
 
-        self.OBJECTS_OF_INTEREST = os.getenv("OBJECTS_INTREST")
+        self.OBJECTS_OF_INTEREST = ast.literal_eval(os.getenv("OBJECTS_INTREST"))
         self.confidence = confidence
 
         if task == "segment":
@@ -38,50 +34,25 @@ class Inference():
         annotated_frame = None
 
         for frame_results in results:
-            # print(f"This is a frame result:{frame_results} in results")
-            logger.info(f"This is a frame_results in results: {frame_results}\n")
-            
-            logger.info(f"This is a boxes from frame_results: {frame_results.boxes}")
-            
-            
-            logger.info(f"This is a masks from frame_results: {frame_results.masks}")
-            
-            if frame_results.masks != None:
-                output.append([frame_results.boxes,
-                                frame_results.keypoints,
-                                frame_results.masks,
-                                frame_results.obb,
-                                frame_results.orig_img,
-                                frame_results.probs,
-                                frame_results.speed])
-
-            # Boxes attributes:
-            # cls
-            # conf
-            # id ????
-            # xywh
-            # xywhn
-            # xyxy
-            # xyxyn
-
-
-
-                # if det.cls.item() in self.OBJECTS_OF_INTEREST.keys() and det.conf >= self.confidence: 
-                #     output.append(DetectedObject(det.xyxy[0],
-                #                                  det.conf,
-                #                                  det.cls,
-                #                                  self.OBJECTS_OF_INTEREST[det.cls.item()],
-                #                                  det.data,
-                #                                  det.xywh,
-                #                                  frame_results.speed,
-                #                                  self.model.model,
-                #                                  frame_results.masks))
+            for det in frame_results.boxes:
+                if det.cls.item() in self.OBJECTS_OF_INTEREST.keys(): 
+                    output.append([ det.conf,
+                                    det.cls,
+                                    self.OBJECTS_OF_INTEREST[det.cls.item()],
+                                    det.xyxy,
+                                    det.xyxyn,
+                                    det.xywh,
+                                    det.xywhn,
+                                    frame_results.speed,
+                                    frame_results.masks,
+                                    frame_results.tojson()])
                     
-                # annotated_frame = self.annotate(unannotated_frame, [self.OBJECTS_OF_INTEREST[det.cls.item()], det.xyxy[0], det.conf])
+                annotated_frame = self.annotate(unannotated_frame, [self.OBJECTS_OF_INTEREST[det.cls.item()], det.xyxy[0], det.conf])
 
-                # detected = True
+                detected = True
         
         return [detected, unannotated_frame, annotated_frame, output]
+    
     
     def annotate(self, frame, objects: list, box_color: tuple = (227, 16, 44)):
         annotator = Annotator(frame, pil=False, line_width=2, example=objects[0])
@@ -90,23 +61,6 @@ class Inference():
 
     def face_blurring(self, frame, mask):
         pass
-
-# class DetectedObject():
-
-#     def __init__(self, coordinates: list, conf: float, cls_id: int, cls:str, data: list, boxes, speed, model, masks) -> None:
-#         self.coordinates = coordinates
-#         self.conf = conf
-#         self.cls_id = cls_id
-#         self.cls = cls
-#         self.data = data
-#         self.boxes = boxes
-#         self.speed = speed
-#         self.model = model
-#         self.masks = masks
-
-#     def __repr__(self) -> str:
-#         return f"Box coordinates: {self.coordinates[0]}, {self.coordinates[1]}, {self.coordinates[2]}, {self.coordinates[3]}, \nConfidence: {self.conf}, \nClass id: {self.cls_id}, \nClass: {self.cls}"
-        
 
         
             

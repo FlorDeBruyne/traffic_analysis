@@ -3,7 +3,6 @@ from datetime import datetime
 import cv2 as cv
 from dotenv import load_dotenv, dotenv_values
 from db.MongoInstance import MongoInstance
-import numpy as np
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -33,7 +32,7 @@ class DataService():
             self.client.select_collection("vehicle")
 
         if objects:
-            for object in objects:  
+            for item in objects:  
 
                 logger.info("starting image encoding")
                 success, buffer = cv.imencode(".png", frames[0])
@@ -48,31 +47,20 @@ class DataService():
                 logger.info("Transfering data")
                 start_time = time.process_time()
 
-                # Needs more data: metadata (model_id, model size, type, inference type with speed),
-                # segmentation (map50,75,95), isTrained = False when added to db
-                # Make a split attribute -> [train, test, val] automatically make a entry either of these
-
-                # 20% of images should be Test, 10% of images Validation and 70% of images will be Train split
-                # This can be done through the len of the output
-
-                # Make a other db for the evaluation entries of models, connected through model_id
-
                 self.client.insert_data({
-                    "confidence": object.conf.item(),
-                    "class_id": object.cls_id.item(),
-                    "class_name": object.cls,
-                    "data": pickle.dumps(object.data),
-                    "xmax": object.coordinates[0].item(),
-                    "ymax": object.coordinates[1].item(),
-                    "ymin": object.coordinates[2].item(),
-                    "xmin": object.coordinates[3].item(),
-                    "speed": object.speed,
-                    "boxes": object.boxes.tolist(),
+                    "confidence": item[0][0].item(),
+                    "class_id": item[1][0].item(),
+                    "class_name": item[2][0],
+                    "xyxy": item[3][0].tolist(),
+                    "xyxyn": item[4][0].tolist(),
+                    "xywh": item[5][0].tolist(),
+                    "xywhn": item[6][0].tolist(),
+                    "speed": item[7],
+                    "masks": item[8],
+                    "json": item[9],
                     "dmy": self.dmy,
                     "time_stamp": timestamp,
                     "image":image_b64,
-                    'keypoints':object.keypoints,
-                    "masks": object.masks
                                      })
                 
                 stop_time = time.process_time()

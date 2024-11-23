@@ -1,5 +1,6 @@
 import numpy as np
 import cv2 as cv
+import streamlit as st
 import os
 from dotenv import load_dotenv
 from datetime import datetime
@@ -48,12 +49,11 @@ class WebcamController():
 
         return capture
 
-    # @threaded
     def stream_video(self):
         """
         Stream video from a webcam, saves and records clips when an object of intrest is detected.
         """
-        
+    
         while True:
             ret, frame = self.capture.read()
 
@@ -61,9 +61,6 @@ class WebcamController():
                 print("Can not retrieve a frame.")
                 break
             
-            # Detection == True if object of interest
-            # model_frames are frames with annotations of the model
-            # Objects is a list of DetectedObject instances
             detection, unannotated_frame, annotated_frame, objects = inf.detect(frame)
             
             if detection == True:
@@ -71,7 +68,7 @@ class WebcamController():
 
             frame = unannotated_frame
 
-            # cv.imshow("Frame", frame)
+            cv.imshow("Frame", frame)
 
             if cv.waitKey(1) == ord('q'):
                 break
