@@ -38,50 +38,41 @@ class Inference():
         annotated_frame = None
 
         for frame_results in results:
-            # print(f"This is a frame result:{frame_results} in results")
-            logger.info(f"This is a frame_results in results: {frame_results}\n")
-            
-            logger.info(f"This is a boxes from frame_results: {frame_results.boxes}")
             
             
-            logger.info(f"This is a masks from frame_results: {frame_results.masks}")
-            
-            if frame_results.masks != None:
-                output.append([frame_results.boxes,
-                                frame_results.keypoints,
-                                frame_results.masks,
-                                frame_results.obb,
-                                frame_results.orig_img,
-                                frame_results.probs,
-                                frame_results.speed])
+            if frame_results is not None:
+                # logger.info(f"This is a frame_result: {frame_results}")
+                for item in frame_results:
+                    logger.info(f"this is what is inside a frame_results: {item}\n")
+                    for i in item:
+                        logger.info(f"this is what is inside {item}: \n {i}\n")
 
-            # Boxes attributes:
-            # cls
-            # conf
-            # id ????
-            # xywh
-            # xywhn
-            # xyxy
-            # xyxyn
+                # if 'person' in frame_results.boxes.cls:
+                #     frame_results.orig_img = self.face_blurring(frame_results.orig_img, frame_results.masks)
+                
+                
+                # output.append([frame_results.boxes.xywh[0],
+                #                frame_results.boxes.xywhn[0],
+                #                frame_results.boxes.xyxy[0],
+                #                frame_results.boxes.xyxyn[0],
+                #                 frame_results.keypoints,
+                #                 frame_results.masks,
+                #     z            frame_results.obb, #LIST???
+                #                 frame_results.orig_img,
+                #                 frame_results.probs,
+                #                 frame_results.speed[0], # preprocess
+                #                 frame_results.speed[1], # inference
+                #                 frame_results.speed[2], # postprocess
+                #                 self.model.model])
+                
+            #     print("Output appended")
 
+            #     annotated_frame = self.annotate(unannotated_frame.copy(), [self.OBJECTS_OF_INTEREST[frame_results.cls.item()], frame_results.xyxy[0], frame_results.conf])
 
-
-                # if det.cls.item() in self.OBJECTS_OF_INTEREST.keys() and det.conf >= self.confidence: 
-                #     output.append(DetectedObject(det.xyxy[0],
-                #                                  det.conf,
-                #                                  det.cls,
-                #                                  self.OBJECTS_OF_INTEREST[det.cls.item()],
-                #                                  det.data,
-                #                                  det.xywh,
-                #                                  frame_results.speed,
-                #                                  self.model.model,
-                #                                  frame_results.masks))
-                    
-                # annotated_frame = self.annotate(unannotated_frame, [self.OBJECTS_OF_INTEREST[det.cls.item()], det.xyxy[0], det.conf])
-
-                # detected = True
+            #     detected = True
+            # print("No object")
         
-        return [detected, unannotated_frame, annotated_frame, output]
+        return None #[detected, unannotated_frame, annotated_frame, output]
     
     def annotate(self, frame, objects: list, box_color: tuple = (227, 16, 44)):
         annotator = Annotator(frame, pil=False, line_width=2, example=objects[0])
@@ -89,6 +80,13 @@ class Inference():
         return annotator.result()
 
     def face_blurring(self, frame, mask):
+        """
+        Input: A frame with a person in it, mask
+        Output: A frame with the face of the person blurred
+
+        use gaussian blur to blur out the face of the person in the frame.
+        """
+        print("Face should be blurred")
         pass
 
 # class DetectedObject():

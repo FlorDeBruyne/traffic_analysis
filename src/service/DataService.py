@@ -33,7 +33,7 @@ class DataService():
             self.client.select_collection("vehicle")
 
         if objects:
-            for object in objects:  
+            for item in objects:  
 
                 logger.info("starting image encoding")
                 success, buffer = cv.imencode(".png", frames[0])
@@ -58,21 +58,49 @@ class DataService():
                 # Make a other db for the evaluation entries of models, connected through model_id
 
                 self.client.insert_data({
-                    "confidence": object.conf.item(),
-                    "class_id": object.cls_id.item(),
-                    "class_name": object.cls,
-                    "data": pickle.dumps(object.data),
-                    "xmax": object.coordinates[0].item(),
-                    "ymax": object.coordinates[1].item(),
-                    "ymin": object.coordinates[2].item(),
-                    "xmin": object.coordinates[3].item(),
-                    "speed": object.speed,
-                    "boxes": object.boxes.tolist(),
+                            #         output.append([frame_results.boxes.xywh[0],
+                            #    frame_results.boxes.xywhn[0],
+                            #    frame_results.boxes.xyxy[0],
+                            #    frame_results.boxes.xyxyn[0],
+                            #     frame_results.keypoints,
+                            #     frame_results.masks,
+                            #     frame_results.obb, #LIST???
+                            #     frame_results.orig_img,
+                            #     frame_results.probs,
+                            #     frame_results.speed[0], # preprocess
+                            #     frame_results.speed[1], # inference
+                            #     frame_results.speed[2], # postprocess
+                            #     self.model.model])
+
+
+
+                    # Boxes:
+                    "xywh" : item[0],
+                    "xywhn": item[1],
+                    "xyxy": item[2],
+                    "xyxyn": item[3],
+                    "keypoints": item[4],
+                    "masks": item[5],
+                    "obb": item[6],
+                    "orig"
+
+
+
+                    "confidence": item.conf.item(),
+                    "class_id": item.cls_id.item(),
+                    "class_name": item.cls,
+                    "data": pickle.dumps(item.data),
+                    "xmax": item.coordinates[0].item(),
+                    "ymax": item.coordinates[1].item(),
+                    "ymin": item.coordinates[2].item(),
+                    "xmin": item.coordinates[3].item(),
+                    "speed": item.speed,
+                    "boxes": item.boxes.tolist(),
                     "dmy": self.dmy,
                     "time_stamp": timestamp,
                     "image":image_b64,
-                    'keypoints':object.keypoints,
-                    "masks": object.masks
+                    'keypoints':item.keypoints,
+                    "masks": item.masks
                                      })
                 
                 stop_time = time.process_time()

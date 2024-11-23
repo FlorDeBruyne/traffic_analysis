@@ -64,14 +64,15 @@ class WebcamController():
             # Detection == True if object of interest
             # model_frames are frames with annotations of the model
             # Objects is a list of DetectedObject instances
+            
             detection, unannotated_frame, annotated_frame, objects = inf.detect(frame)
             
-            if detection == True:
-                data.store_data([unannotated_frame, annotated_frame], objects)
+            # if detection == True:
+                # data.store_data([unannotated_frame, annotated_frame], objects)
 
             frame = unannotated_frame
 
-            # cv.imshow("Frame", frame)
+            cv.imshow("Frame", frame)
 
             if cv.waitKey(1) == ord('q'):
                 break
