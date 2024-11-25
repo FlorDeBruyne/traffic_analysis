@@ -26,7 +26,9 @@ class Inference():
             else:
                 self.path = os.getenv("DET_SMALL")
 
-        self.model = YOLO(self.path, task=task, )
+        self.model = YOLO(self.path, task=task)
+        # self.model.export(format='ncnn')
+
 
 
     def detect(self, frame):
@@ -72,7 +74,7 @@ class Inference():
             #     detected = True
             # print("No object")
         
-        return None #[detected, unannotated_frame, annotated_frame, output]
+        return [detected, unannotated_frame, annotated_frame, output]
     
     def annotate(self, frame, objects: list, box_color: tuple = (227, 16, 44)):
         annotator = Annotator(frame, pil=False, line_width=2, example=objects[0])
