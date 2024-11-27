@@ -51,27 +51,29 @@ class WebcamController():
 
     def stream_video(self):
         """
-        Stream video from a webcam, saves and records clips when an object of intrest is detected.
+        Stream video from a webcam, process each frame to detect objects of interest,
+        and display the results in real-time.
         """
-    
+
         while True:
             ret, frame = self.capture.read()
 
             if not ret:
-                print("Can not retrieve a frame.")
+                print("Cannot retrieve a frame.")
                 break
-            
-            detection, unannotated_frame, annotated_frame, objects = inf.detect(frame)
-            
-            if detection == True:
-                data.store_data([unannotated_frame, annotated_frame], objects)
 
-            frame = unannotated_frame
+            # Process each yielded result from detect
+            for detection, unannotated_frame, annotated_frame, objects in inf.detect(frame):
+                if detection:
+                    # Store the detected data
+                    data.store_data([unannotated_frame, annotated_frame], objects)
 
-            cv.imshow("Frame", frame)
+                # Display the annotated frame
+                cv.imshow("Frame", annotated_frame)
 
             if cv.waitKey(1) == ord('q'):
                 break
-        
+
+        # Release resources when done
         self.capture.release()
         cv.destroyAllWindows()

@@ -13,8 +13,8 @@ if __name__ == "__main__":
     
     logger = logging.getLogger(__name__)
 
-    # webcam = WebcamController()
+    webcam = WebcamController()
     logging.basicConfig(filename='capture.log', level=logging.INFO)
     logger.info("Started")
-    # webcam.stream_video()
-    run_streamlit()
+    webcam.stream_video()
+    # run_streamlit()

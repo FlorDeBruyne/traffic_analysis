@@ -26,32 +26,51 @@ class Inference():
 
 
     def detect(self, frame):
+        """
+        Process a frame to detect objects of interest and annotate them.
+
+        Args:
+            frame (numpy.ndarray): The input frame from the video stream.
+
+        Yields:
+            tuple: (detected, unannotated_frame, annotated_frame, output)
+                - detected (bool): Whether an object of interest was detected.
+                - unannotated_frame (numpy.ndarray): Original frame.
+                - annotated_frame (numpy.ndarray): Frame with annotations.
+                - output (list): Details of the detected objects.
+        """
         results = self.model(frame, stream=True, imgsz=640, conf=self.confidence)
 
         detected = False
         output = []
-        unannotated_frame = frame
-        annotated_frame = None
+        unannotated_frame = frame.copy()
+        annotated_frame = frame.copy()
 
         for frame_results in results:
             for det in frame_results.boxes:
-                if det.cls.item() in self.OBJECTS_OF_INTEREST.keys(): 
-                    output.append([ det.conf,
-                                    det.cls,
-                                    self.OBJECTS_OF_INTEREST[det.cls.item()],
-                                    det.xyxy,
-                                    det.xyxyn,
-                                    det.xywh,
-                                    det.xywhn,
-                                    frame_results.speed,
-                                    frame_results.masks,
-                                    frame_results.tojson()])
-                    
-                annotated_frame = self.annotate(unannotated_frame, [self.OBJECTS_OF_INTEREST[det.cls.item()], det.xyxy[0], det.conf])
+                if det.cls.item() in self.OBJECTS_OF_INTEREST.keys():
+                    output.append([
+                        det.conf,
+                        det.cls,
+                        self.OBJECTS_OF_INTEREST[det.cls.item()],
+                        det.xyxy,
+                        det.xyxyn,
+                        det.xywh,
+                        det.xywhn,
+                        frame_results.speed,
+                        frame_results.masks,
+                        frame_results.tojson(),
+                    ])
 
-                detected = True
-        
-        return [detected, unannotated_frame, annotated_frame, output]
+                    # Annotate the frame
+                    annotated_frame = self.annotate(
+                        unannotated_frame,
+                        [self.OBJECTS_OF_INTEREST[det.cls.item()], det.xyxy[0], det.conf]
+                    )
+
+                    detected = True
+
+            yield detected, unannotated_frame, annotated_frame, output 
     
     
     def annotate(self, frame, objects: list, box_color: tuple = (227, 16, 44)):
