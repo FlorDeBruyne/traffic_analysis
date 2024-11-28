@@ -1,7 +1,8 @@
 import logging, os, ast
 from ultralytics import YOLO
 from ultralytics.utils.plotting import Annotator
-
+import cv2
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -48,24 +49,29 @@ class Inference():
 
         for frame_results in results:
             for det in frame_results.boxes:
-                if det.cls.item() in self.OBJECTS_OF_INTEREST.keys():
+                class_id = det.cls.item()
+                if class_id in self.OBJECTS_OF_INTEREST.keys():
+                    if class_id == 59: #number of face
+                        unannotated_frame = self.face_blurring(unannotated_frame, det.xywh)
+                        annotated_frame = self.face_blurring(annotated_frame, det.xywh)
+
                     output.append([
                         det.conf,
                         det.cls,
-                        self.OBJECTS_OF_INTEREST[det.cls.item()],
+                        self.OBJECTS_OF_INTEREST[class_id],
                         det.xyxy,
                         det.xyxyn,
                         det.xywh,
                         det.xywhn,
                         frame_results.speed,
-                        frame_results.masks,
+                        getattr(frame_results, "masks", None), #frame_results.masks,
                         frame_results.tojson(),
                     ])
 
                     # Annotate the frame
                     annotated_frame = self.annotate(
                         unannotated_frame,
-                        [self.OBJECTS_OF_INTEREST[det.cls.item()], det.xyxy[0], det.conf]
+                        [self.OBJECTS_OF_INTEREST[class_id], det.xyxy[0], det.conf]
                     )
 
                     detected = True
@@ -73,15 +79,65 @@ class Inference():
             yield detected, unannotated_frame, annotated_frame, output 
     
     
-    def annotate(self, frame, objects: list, box_color: tuple = (227, 16, 44)):
-        annotator = Annotator(frame, pil=False, line_width=2, example=objects[0])
-        annotator.box_label(box=objects[1], label=f"{objects[0]}_{(objects[2].item()*100):.2f}", color=box_color)
+    def annotate(self, frame, object_details: list, box_color: tuple = (227, 16, 44)):
+        """
+        Draws a bounding box and label on the frame for a detected object.
+
+        Args:
+            frame (numpy.ndarray): The image to annotate.
+            object_details (list): List containing:
+                * Label (str): Name of the object (e.g., 'person').
+                * Bounding box (list or np.ndarray): Coordinates of the box in `[x_min, y_min, x_max, y_max]` format.
+                * Confidence (float): Detection confidence score between 0 and 1.
+            box_color (tuple, optional): RGB color for the bounding box. Defaults to (227, 16, 44).
+
+        Returns:
+            numpy.ndarray: Annotated image with bounding boxes and labels.
+        """
+        if len(object_details) != 3:
+            raise ValueError("object_details must contain exactly three elements: [label, box, confidence].")
+
+        label, box, confidence = object_details
+        annotator = Annotator(frame, pil=False, line_width=2, example=label)
+        formatted_label = f"{label}_{confidence * 100:.2f}%"
+        annotator.box_label(box=box, label=formatted_label, color=box_color)
         return annotator.result()
 
-    def face_blurring(self, frame, mask):
-        pass
+    def face_blurring(self, frame, xywh):
+        """
+        Applies a Gaussian blur to a specific region of the frame based on bounding box coordinates.
 
-        
+        Args:
+            frame (numpy.ndarray): The input image (BGR format).
+            xywh (list or np.ndarray): Bounding box in `[x_center, y_center, width, height]` format.
+
+        Returns:
+            numpy.ndarray: The image with the specified region blurred.
+        """
+        # Extract frame dimensions
+        frame_height, frame_width = frame.shape[:2]
+
+        # Convert xywh (relative format) to absolute pixel coordinates
+        x_center, y_center, width, height = xywh
+        x_center, y_center = int(x_center * frame_width), int(y_center * frame_height)
+        width, height = int(width * frame_width), int(height * frame_height)
+
+        # Calculate the bounding box corners
+        x_min = max(x_center - width // 2, 0)
+        y_min = max(y_center - height // 2, 0)
+        x_max = min(x_center + width // 2, frame_width)
+        y_max = min(y_center + height // 2, frame_height)
+
+        # Apply Gaussian blur to the region
+        blurred_frame = frame.copy()
+        blurred_frame[y_min:y_max, x_min:x_max] = cv2.GaussianBlur(
+            frame[y_min:y_max, x_min:x_max],
+            (21, 21),
+            0,
+        )
+
+        return blurred_frame
+            
             
 
 
