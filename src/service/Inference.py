@@ -65,7 +65,7 @@ class Inference():
                         det.xywhn,
                         frame_results.speed,
                         getattr(frame_results, "masks", None), #frame_results.masks,
-                        frame_results.tojson(),
+                        frame_results.to_json(),
                     ])
 
                     # Annotate the frame
@@ -77,8 +77,8 @@ class Inference():
                     detected = True
 
             yield detected, unannotated_frame, annotated_frame, output 
-    
-    
+
+
     def annotate(self, frame, object_details: list, box_color: tuple = (227, 16, 44)):
         """
         Draws a bounding box and label on the frame for a detected object.
@@ -99,7 +99,7 @@ class Inference():
 
         label, box, confidence = object_details
         annotator = Annotator(frame, pil=False, line_width=2, example=label)
-        formatted_label = f"{label}_{confidence * 100:.2f}%"
+        formatted_label = f"{label}_{confidence.item() * 100:.2f}%"
         annotator.box_label(box=box, label=formatted_label, color=box_color)
         return annotator.result()
 
@@ -137,7 +137,7 @@ class Inference():
         )
 
         return blurred_frame
-            
+        
             
 
 
