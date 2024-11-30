@@ -34,6 +34,10 @@ class WebcamController():
         
 
     def camera_setup(self):
+        """
+        Setup up the webcam settings
+        """
+
         assert cv.VideoCapture(self.device_id), "The input source is not accesible"
         capture = cv.VideoCapture(self.device_id)
 

@@ -44,6 +44,7 @@ class Inference():
 
         detected = False
         output = []
+        
         unannotated_frame = frame.copy()
         annotated_frame = frame.copy()
 
@@ -70,7 +71,7 @@ class Inference():
 
                     # Annotate the frame
                     annotated_frame = self.annotate(
-                        unannotated_frame,
+                        annotated_frame,
                         [self.OBJECTS_OF_INTEREST[class_id], det.xyxy[0], det.conf]
                     )
 
@@ -79,7 +80,7 @@ class Inference():
             yield detected, unannotated_frame, annotated_frame, output 
 
 
-    def annotate(self, frame, object_details: list, box_color: tuple = (227, 16, 44)):
+    def annotate(self, frame, object_details: list, box_color: tuple = (54, 69, 79)):
         """
         Draws a bounding box and label on the frame for a detected object.
 
@@ -89,19 +90,21 @@ class Inference():
                 * Label (str): Name of the object (e.g., 'person').
                 * Bounding box (list or np.ndarray): Coordinates of the box in `[x_min, y_min, x_max, y_max]` format.
                 * Confidence (float): Detection confidence score between 0 and 1.
-            box_color (tuple, optional): RGB color for the bounding box. Defaults to (227, 16, 44).
+            box_color (tuple, optional): RGB color for the bounding box. Defaults to (54, 69, 79).
 
         Returns:
             numpy.ndarray: Annotated image with bounding boxes and labels.
         """
+
         if len(object_details) != 3:
             raise ValueError("object_details must contain exactly three elements: [label, box, confidence].")
 
         label, box, confidence = object_details
-        annotator = Annotator(frame, pil=False, line_width=2, example=label)
+        annotator = Annotator(frame, pil=False, line_width=1, example=label)
         formatted_label = f"{label}_{confidence.item() * 100:.2f}%"
         annotator.box_label(box=box, label=formatted_label, color=box_color)
         return annotator.result()
+
 
     def face_blurring(self, frame, xywh):
         """
