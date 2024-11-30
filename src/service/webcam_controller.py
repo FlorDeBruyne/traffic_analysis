@@ -7,8 +7,8 @@ from datetime import datetime
 from collections import deque
 import time, threading
 
-from service.Inference import Inference
-from service.DataService import DataService
+from service.inference_service import Inference
+from service.data_service import DataService
 
 load_dotenv()
 data = DataService()
@@ -37,7 +37,6 @@ class WebcamController():
         """
         Setup up the webcam settings
         """
-
         assert cv.VideoCapture(self.device_id), "The input source is not accesible"
         capture = cv.VideoCapture(self.device_id)
 

@@ -3,7 +3,7 @@ from datetime import datetime
 import cv2 as cv
 from PIL import Image
 from dotenv import load_dotenv, dotenv_values
-from db.MongoInstance import MongoInstance
+from db.mongo_instance import MongoInstance
 from io import BytesIO
 import random
 
@@ -36,7 +36,7 @@ class DataService():
         else:
             return "test"
     
-    # @threaded
+    @threaded
     def store_data(self, frames: list, objects: list = None):
         timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
 
@@ -70,6 +70,8 @@ class DataService():
                     "xyxy": item[3][0].tolist(),
                     "xyxyn": item[4][0].tolist(),
                     "xywh": item[5][0].tolist(),
+                    "box_width": item[5][0].tolist()[2],
+                    "box_height": item[5][0].tolist()[3],
                     "xywhn": item[6][0].tolist(),
                     "speed": item[7],
                     "masks": item[8],

@@ -1,6 +1,6 @@
 import logging
 import os
-from service.WebcamController import WebcamController
+from service.webcam_controller import WebcamController
 
 
 def run_streamlit():

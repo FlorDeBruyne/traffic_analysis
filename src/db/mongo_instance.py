@@ -4,7 +4,7 @@ from ssh_pymongo import MongoSession
 from dotenv import load_dotenv, dotenv_values
 load_dotenv()
 
-class MongoInstance:
+class MongoInstance(MongoSession):
 
     def __init__(self, databaseName:str) -> None:
         self.client = MongoSession(
@@ -36,6 +36,9 @@ class MongoInstance:
     
     def retrieve_data(self, query):
          return self.collection.find(query)
+    
+    def aggregate(self, query):
+         return self.collection.aggregate(query)
     
     def close(self):
          self.client.close()

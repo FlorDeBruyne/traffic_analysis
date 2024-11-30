@@ -2,9 +2,9 @@ import cv2 as cv
 import streamlit as st
 from dotenv import load_dotenv
 
-from service.Inference import Inference
-from service.DataService import DataService
-from service.WebcamController import WebcamController
+from src.service.inference_service import Inference
+from src.service.data_service import DataService
+from src.service.webcam_controller import WebcamController
 
 load_dotenv()
 data = DataService()
