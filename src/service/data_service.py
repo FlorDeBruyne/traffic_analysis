@@ -1,11 +1,14 @@
-import os, csv, time, threading, base64, logging
+import os, time, base64, logging, threading
 from datetime import datetime
 import cv2 as cv
 from PIL import Image
 from dotenv import load_dotenv, dotenv_values
 from db.mongo_instance import MongoInstance
 from io import BytesIO
+import numpy as np
 import random
+import albumentations as A
+
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -20,14 +23,35 @@ def threaded(fn):
 
 class DataService():
 
-    def __init__(self) -> None:
+    def __init__(self, augment = True) -> None:
         self.dmy = datetime.now().strftime("%d_%m_%y")
         
         self.client = MongoInstance("traffic_analysis")
         self.client.select_collection("vehicle")
 
-    # @threaded
+        if augment == True:
+            self._transformations()
+
+    def _transformations(self):
+        self.train_transform = A.Compose([
+                    A.SmallestMaxSize(max_size=640),
+                    A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=15, p=0.5),
+                    A.RandomCrop(height=128, width=128),
+                    A.RGBShift(r_shift_limit=15, g_shift_limit=15, b_shift_limit=15, p=0.5),
+                    A.RandomBrightnessContrast(p=0.5),
+                    A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+                    ])
+        
+        self.val_transform = A.Compose([
+            A.SmallestMaxSize(max_size=640),
+            A.CenterCrop(height=128, widt=128),
+            A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+        ])
+
     def assign_split(self):
+        """
+        Assign a split to an object
+        """
         rand = random.random()
         if 0.0 <= rand < 0.7:
             return "train"
@@ -38,6 +62,13 @@ class DataService():
     
     @threaded
     def store_data(self, frames: list, objects: list = None):
+        """
+        Store send images to the mongodb collection.
+        
+        Args:
+            frames (list): Images to be saved
+            objects (list): Objects in these images
+        """
         timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
 
         if not self.client:
@@ -89,11 +120,13 @@ class DataService():
 
     
 
-    def extract_conditional_images(self, confidence, output_dir: str):
+    def extract_conditional_images(self, condition, output_dir: str):
         """
-        Extracts all images that comply's with a certain confidence from the MongoDB collection.
+        Extracts all images that comply with a certain condition from the MongoDB collection
+        to a local directory.
         
         Args:
+            condition 
             output_dir (str): Directory to save the extracted images.
         """
 
@@ -105,7 +138,7 @@ class DataService():
             os.makedirs(output_dir)
         
         logger.info("Fetching confident data from MongoDB...")
-        documents = self.client.retrieve_data(query={"confidence": {"$gt": 0.95}})
+        documents = self.client.retrieve_data(query={"condition": {"$gt": 0.95}})
 
         if not documents:
             logger.info("No documents found in the database.")
@@ -116,7 +149,7 @@ class DataService():
 
     def extract_all_images(self, output_dir: str):
         """
-        Extracts all images from the MongoDB collection.
+        Extracts all images from the MongoDB collection and save's them to a local directory.
         
         Args:
             output_dir (str): Directory to save the extracted images.
@@ -140,9 +173,9 @@ class DataService():
         self.save_images(documents, output_dir)
 
 
-    def save_images(self, documents, output_dir:str):
+    def save_images_localy(self, documents, output_dir:str):
         """
-        Save all images to a output_dir.
+        Save all preprocessed images to a output_dir.
 
         Args:
             documents: MongoDB documents.
@@ -152,6 +185,7 @@ class DataService():
         for idx, doc in enumerate(documents):
             base_image = doc.get("base_image")
             anno_image = doc.get("annotated_image")
+            split = doc.get("split")
             class_name = doc.get("class_name", "UNKOWN")
             timestamp = doc.get("time_stamp", "UNKOWN")
 
@@ -160,12 +194,15 @@ class DataService():
                 logger.warning(f"Document {idx} does not have an image.")
                 continue
 
+            if not split:
+                print(f"Document {idx} does not have an assigned split.")
+                logger.warning(f"Document {idx} does not have an assigned split.")
+                continue
+                
             try:
-                base_image_data = base64.b64decode(base_image)
-                base_image = Image.open(BytesIO(base_image_data))
+                base_image = self.preprocess_images(base_image)
 
-                anno_image_data = base64.b64decode(anno_image)
-                anno_image = Image.open(BytesIO(anno_image_data))
+                anno_image_data = self.preprocess_images(anno_image)
 
                 class_dir = os.path.join(output_dir, class_name)
                 if not os.path.exists(class_dir):
@@ -184,4 +221,28 @@ class DataService():
 
         logger.info("Image extraction complete.")
 
+
+    def preprocess_images(self,
+                          encoded_image,
+                            split: str,
+                            target_size: tuple = (640, 640)):
+        """
+        Preprocess images by resizing and optionally augmenting.
         
+        Args:
+            encoded_image: encoded image
+            target_size (tuple): Desired image size for model input
+        
+        return:
+            list of preprocessed images
+        """
+        image_data = base64.b64decode(encoded_image)
+        base_image = Image.open(BytesIO(image_data))
+        resized_image = base_image.resize(target_size)
+        
+        if split == "train":
+            resized_image = self.train_transform(image=resized_image)['image']
+        if split == "valid":
+            resized_image = self.val_transform(image=resized_image)['image']
+
+        return resized_image
