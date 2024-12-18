@@ -174,7 +174,7 @@ def visualize_class_metrics(df):
     plt.show()
 
 # # Example usage
-def main():
+def main_cate():
     client = MongoInstance("traffic_analysis")
     client.select_collection("vehicle")
     
@@ -182,7 +182,7 @@ def main():
     analysis_results = analyze_object_classes(client)
     
     # Display results
-    print(analysis_results)
+    print(analysis_results.info())
     
     # Optional: Save to CSV
     analysis_results.to_csv('object_class_analysis.csv', index=False)

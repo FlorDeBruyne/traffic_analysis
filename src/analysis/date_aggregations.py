@@ -1,188 +1,160 @@
 from db.mongo_instance import MongoInstance
+import pandas as pd
 
 # Connect to MongoDB
 client = MongoInstance("traffic_analysis")
 client.select_collection("vehicle")
 
-# Aggregation pipeline
-# 1. Group by Month Query
-month_query = [
-    {
-        '$addFields': {
-            'parsed_month': {
-                '$toInt': { '$substr': ['$dmy', 3, 2] }
-            },
-            'parsed_year': {
-                '$toInt': { '$substr': ['$dmy', 6, 2] }
-            }
-        }
-    },
-    {
-        '$group': {
-            '_id': {
-                'month': '$parsed_month',
-                'year': { '$add': [2000, '$parsed_year'] }
-            },
-            'count': {'$sum': 1},
-            'avg_confidence': {'$avg': '$confidence'},
-            'classes': {'$addToSet': '$class_name'}
-        }
-    },
-    {
-        '$sort': {'_id.year': 1, '_id.month': 1}
-    }
-]
-
-# 2. Group by Week Query
-week_query = [
-    {
-        '$addFields': {
-            'parsed_date': {
-                '$dateFromString': {
-                    'dateString': {
-                        '$concat': [
-                            {'$substr': ['$time_stamp', 0, 2]},  # Day
-                            '/',
-                            {'$substr': ['$time_stamp', 3, 2]},  # Month
-                            '/',
-                            {'$concat': ['20', {'$substr': ['$time_stamp', 6, 2]}]}  # Year
-                        ]
-                    },
-                    'format': '%d/%m/%Y'
+def analyse_object_dates(collection):
+    combined_query = [
+        # Initial date parsing stage
+        {
+            '$addFields': {
+                'parsed_date': {
+                    '$dateFromString': {
+                        'dateString': {
+                            '$concat': [
+                                {'$substr': ['$time_stamp', 0, 2]},  # Day
+                                '/',
+                                {'$substr': ['$time_stamp', 3, 2]},  # Month
+                                '/',
+                                {'$concat': ['20', {'$substr': ['$time_stamp', 6, 2]}]}  # Year
+                            ]
+                        },
+                        'format': '%d/%m/%Y'
+                    }
+                },
+                'parsed_hour': {
+                    '$toInt': { '$substr': ['$time_stamp', 9, 2] }
                 }
             }
-        }
-    },
-    {
-        '$group': {
-            '_id': {
-                'week': { '$week': '$parsed_date' },
-                'year': { '$year': '$parsed_date' }
-            },
-            'count': {'$sum': 1},
-            'avg_confidence': {'$avg': '$confidence'},
-            'classes': {'$addToSet': '$class_name'}
-        }
-    },
-    {
-        '$sort': {'_id.year': 1, '_id.week': 1}
-    }
-]
-
-# 3. Group by Day Query
-day_query = [
-    {
-        '$addFields': {
-            'parsed_date': {
-                '$dateFromString': {
-                    'dateString': {
-                        '$concat': [
-                            {'$substr': ['$time_stamp', 0, 2]},  # Day
-                            '/',
-                            {'$substr': ['$time_stamp', 3, 2]},  # Month
-                            '/',
-                            {'$concat': ['20', {'$substr': ['$time_stamp', 6, 2]}]}  # Year
-                        ]
-                    },
-                    'format': '%d/%m/%Y'
-                }
+        },
+        
+        # Month Aggregation
+        {
+            '$group': {
+                '_id': {
+                    'granularity': 'month',
+                    'month': { '$month': '$parsed_date' },
+                    'year': { '$year': '$parsed_date' }
+                },
+                'count': {'$sum': 1},
+                'avg_confidence': {'$avg': '$confidence'},
+                'classes': {'$addToSet': '$class_name'}
+            }
+        },
+        
+        # Week Aggregation
+        {
+            '$group': {
+                '_id': {
+                    'granularity': 'week',
+                    'week': { '$week': '$parsed_date' },
+                    'year': { '$year': '$parsed_date' }
+                },
+                'count': {'$sum': 1},
+                'avg_confidence': {'$avg': '$confidence'},
+                'classes': {'$addToSet': '$class_name'}
+            }
+        },
+        
+        # Day Aggregation
+        {
+            '$group': {
+                '_id': {
+                    'granularity': 'day',
+                    'day': { '$dayOfMonth': '$parsed_date' },
+                    'month': { '$month': '$parsed_date' },
+                    'year': { '$year': '$parsed_date' }
+                },
+                'count': {'$sum': 1},
+                'avg_confidence': {'$avg': '$confidence'},
+                'classes': {'$addToSet': '$class_name'}
+            }
+        },
+        
+        # Hour Aggregation
+        {
+            '$group': {
+                '_id': {
+                    'granularity': 'hour',
+                    'hour': '$parsed_hour',
+                    'day': { '$dayOfMonth': '$parsed_date' },
+                    'month': { '$month': '$parsed_date' },
+                    'year': { '$year': '$parsed_date' }
+                },
+                'count': {'$sum': 1},
+                'avg_confidence': {'$avg': '$confidence'},
+                'classes': {'$addToSet': '$class_name'}
+            }
+        },
+        
+        # Sorting stage
+        {
+            '$sort': {
+                '_id.granularity': 1,
+                '_id.year': 1,
+                '_id.month': 1,
+                '_id.day': 1,
+                '_id.hour': 1
             }
         }
-    },
-    {
-        '$group': {
-            '_id': {
-                'day': { '$dayOfMonth': '$parsed_date' },
-                'month': { '$month': '$parsed_date' },
-                'year': { '$year': '$parsed_date' }
-            },
-            'count': {'$sum': 1},
-            'avg_confidence': {'$avg': '$confidence'},
-            'classes': {'$addToSet': '$class_name'}
-        }
-    },
-    {
-        '$sort': {
-            '_id.year': 1, 
-            '_id.month': 1, 
-            '_id.day': 1
-        }
-    }
-]
+    ]
 
-# 4. Group by Hour Query
-hour_query = [
-    {
-        '$addFields': {
-            'parsed_hour': {
-                '$toInt': { '$substr': ['$time_stamp', 9, 2] }
-            },
-            'parsed_date': {
-                '$dateFromString': {
-                    'dateString': {
-                        '$concat': [
-                            {'$substr': ['$time_stamp', 0, 2]},  # Day
-                            '/',
-                            {'$substr': ['$time_stamp', 3, 2]},  # Month
-                            '/',
-                            {'$concat': ['20', {'$substr': ['$time_stamp', 6, 2]}]}  # Year
-                        ]
-                    },
-                    'format': '%d/%m/%Y'
-                }
-            }
-        }
-    },
-    {
-        '$group': {
-            '_id': {
-                'hour': '$parsed_hour',
-                'day': { '$dayOfMonth': '$parsed_date' },
-                'month': { '$month': '$parsed_date' },
-                'year': { '$year': '$parsed_date' }
-            },
-            'count': {'$sum': 1},
-            'avg_confidence': {'$avg': '$confidence'},
-            'classes': {'$addToSet': '$class_name'}
-        }
-    },
-    {
-        '$sort': {
-            '_id.year': 1, 
-            '_id.month': 1, 
-            '_id.day': 1, 
-            '_id.hour': 1
-        }
+    results = list(collection.aggregate(combined_query))
+    
+    # Organize results by granularity
+    aggregations = {
+        'month': [],
+        'week': [],
+        'day': [],
+        'hour': []
     }
-]
-
-def run_aggregation(query):
-    results = list(client.aggregate(query))
+    
     for result in results:
-        print(result)
-
-def run_month_query():
-    run_aggregation(month_query)
-
-def run_week_query():
-    run_aggregation(week_query)
-
-def run_day_query():
-    run_aggregation(day_query)
-
-def run_hour_query():
-    run_aggregation(hour_query)
-
-def run_all_queries():
-    print("Grouping by Month:")
-    run_aggregation(month_query)
+        granularity = result['_id']['granularity']
+        aggregations[granularity].append(result)
     
-    print("Grouping by Week:")
-    run_aggregation(week_query)
+    return results
+
+def main_date():
+    client = MongoInstance("traffic_analysis")
+    client.select_collection("vehicle")
     
-    print("Grouping by Day:")
-    run_aggregation(day_query)
+    # Perform analysis
+    analysis_results = analyse_object_dates(client)
     
-    print("Grouping by Hour:")
-    run_aggregation(hour_query)
+    # Display results
+    print(analysis_results)
+    
+    # Optional: Save to CSV
+    # analysis_results.to_csv('object_date_analysis.csv', index=False)
+
+
+
+def transform_aggregations_for_auto_report(aggregations):
+    """
+    Transform aggregation results into a format suitable for auto_report collection
+    
+    :param aggregations: Dictionary of aggregation results
+    :return: List of documents for auto_report collection
+    """
+    auto_report_docs = []
+    
+    for granularity, results in aggregations.items():
+        for result in results:
+            doc = {
+                "type": "temporal_aggregation",
+                "time_granularity": granularity,
+                "time_details": result['_id'],
+                "detection_summary": {
+                    "total_count": result['count'],
+                    "avg_confidence": result['avg_confidence'],
+                    "detected_classes": result['classes']
+                }
+            }
+            auto_report_docs.append(doc)
+    
+    return auto_report_docs
+
 
