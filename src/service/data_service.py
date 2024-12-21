@@ -23,14 +23,15 @@ def threaded(fn):
 
 class DataService():
 
-    def __init__(self, augment = True) -> None:
+    def __init__(self, client:str, augment = False) -> None:
         self.dmy = datetime.now().strftime("%d_%m_%y")
         
         self.client = MongoInstance("traffic_analysis")
-        self.client.select_collection("vehicle")
+        self.client.select_collection(client)
 
         if augment == True:
             self._transformations()
+
 
     def _transformations(self):
         self.train_transform = A.Compose([
@@ -48,7 +49,8 @@ class DataService():
             A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
         ])
 
-    def assign_split(self):
+
+    def _assign_split(self):
         """
         Assign a split to an object
         """
@@ -60,8 +62,9 @@ class DataService():
         else:
             return "test"
     
+
     @threaded
-    def store_data(self, frames: list, objects: list = None):
+    def store_inference_data(self, frames: list, objects: list = None):
         """
         Store send images to the mongodb collection.
         
@@ -111,14 +114,169 @@ class DataService():
                     "time_stamp": timestamp,
                     "base_image":base_image,
                     "annotated_image": anno_image,
-                    "split": self.assign_split(),
+                    "split": self._assign_split(),
                     "is_trained": False
                                      })
                 
                 stop_time = time.process_time()
                 logger.info(f"Transfer complete, time {stop_time-start_time}")
 
-    
+
+    @threaded
+    def store_yearly_data(self, input_doc):
+        """
+        Store aggregated yearly data to the MongoDB collection.
+
+        Args:
+            input_doc (dict): Aggregated yearly metrics to be saved.
+        """
+        timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
+
+        # Ensure the MongoDB client and collection are initialized
+        if not self.client:
+            self.client = MongoInstance("traffic_analysis")
+            self.client.select_collection("yearly_metrics")  # Select or create the yearly data collection
+
+        logger.info("Storing yearly data to the database.")
+        try:
+            start_time = time.process_time()
+
+            # Insert the aggregated yearly data
+            self.client.insert_data({
+                "year": input_doc.get("year"),
+                "class_id": input_doc.get("class_id"),
+                "class_name": input_doc.get("class_name"),
+                "detections_count": input_doc.get("detections_count"),
+                "confidence_metrics": input_doc.get("confidence_metrics"),
+                "speed_metrics": input_doc.get("speed_metrics"),
+                "box_metrics": input_doc.get("box_metrics"),
+                "time_stamp": timestamp  # Timestamp of when the data was stored
+            })
+
+            stop_time = time.process_time()
+            logger.info(f"Yearly data storage complete, time taken: {stop_time - start_time}")
+
+        except Exception as e:
+            print(f"Failed to store yearly data: {str(e)}")
+            logger.error(f"Failed to store yearly data: {str(e)}")
+
+
+    @threaded
+    def store_monthly_data(self, input_doc):
+        """
+        Store aggregated monthly data to the MongoDB collection.
+
+        Args:
+            input_doc (dict): Aggregated monthly metrics to be saved.
+        """
+        timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
+
+        # Ensure the MongoDB client and collection are initialized
+        if not self.client:
+            self.client = MongoInstance("traffic_analysis")
+            self.client.select_collection("monthly_metrics")  # Select or create the monthly data collection
+
+        logger.info("Storing monthly data to the database.")
+        try:
+            start_time = time.process_time()
+
+            # Insert the aggregated monthly data
+            self.client.insert_data({
+                "month": input_doc.get("month"),
+                "class_id": input_doc.get("class_id"),
+                "class_name": input_doc.get("class_name"),
+                "detections_count": input_doc.get("detections_count"),
+                "confidence_metrics": input_doc.get("confidence_metrics"),
+                "speed_metrics": input_doc.get("speed_metrics"),
+                "box_metrics": input_doc.get("box_metrics"),
+                "time_stamp": timestamp  # Timestamp of when the data was stored
+            })
+
+            stop_time = time.process_time()
+            logger.info(f"monthly data storage complete, time taken: {stop_time - start_time}")
+
+        except Exception as e:
+            print(f"Failed to store monthly data: {str(e)}")
+            logger.error(f"Failed to store monthly data: {str(e)}")
+
+
+    @threaded
+    def store_dayly_data(self, input_doc):
+        """
+        Store aggregated dayly data to the MongoDB collection.
+
+        Args:
+            input_doc (dict): Aggregated dayly metrics to be saved.
+        """
+        timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
+
+        # Ensure the MongoDB client and collection are initialized
+        if not self.client:
+            self.client = MongoInstance("traffic_analysis")
+            self.client.select_collection("dayly_metrics")  # Select or create the dayly data collection
+
+        logger.info("Storing dayly data to the database.")
+        try:
+            start_time = time.process_time()
+
+            # Insert the aggregated dayly data
+            self.client.insert_data({
+                "day": input_doc.get("day"),
+                "class_id": input_doc.get("class_id"),
+                "class_name": input_doc.get("class_name"),
+                "detections_count": input_doc.get("detections_count"),
+                "confidence_metrics": input_doc.get("confidence_metrics"),
+                "speed_metrics": input_doc.get("speed_metrics"),
+                "box_metrics": input_doc.get("box_metrics"),
+                "time_stamp": timestamp  # Timestamp of when the data was stored
+            })
+
+            stop_time = time.process_time()
+            logger.info(f"dayly data storage complete, time taken: {stop_time - start_time}")
+
+        except Exception as e:
+            print(f"Failed to store dayly data: {str(e)}")
+            logger.error(f"Failed to store dayly data: {str(e)}")
+
+
+    @threaded
+    def store_category_data(self, input_doc: dict):
+        """
+        Store aggregated category data to the MongoDB collection.
+
+        Args:
+            input_doc (dict): Aggregated category metrics to be saved.
+        """
+        timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
+
+        # Ensure the MongoDB client and collection are initialized
+        if not self.client:
+            self.client = MongoInstance("traffic_analysis")
+            self.client.select_collection("category_metrics")  # Select or create the category data collection
+
+        logger.info("Storing category data to the database.")
+        try:
+            start_time = time.process_time()
+
+            self.client.insert_data({
+                "class_name": input_doc.get("class_name"),
+                "total_count": input_doc.get("total_count"),
+                "trained_count": input_doc.get("trained_count"),
+                "untrained_count": input_doc.get("untrained_count"),
+                "confidence_metrics": input_doc.get("confidence_metrics"),
+                "speed_metrics": input_doc.get("speed_metrics"),
+                "box_metrics": input_doc.get("box_metrics"),
+                "split_distribution": input_doc.get("split_distribution", []),
+                "time_stamp": timestamp  # Timestamp of when the data was stored
+            })
+
+            stop_time = time.process_time()
+            logger.info(f"Category data storage complete, time taken: {stop_time - start_time}")
+
+        except Exception as e:
+            logger.error(f"Failed to store category data: {str(e)}")
+            print(f"Failed to store category data: {str(e)}")
+
 
     def extract_conditional_images(self, condition, output_dir: str):
         """
