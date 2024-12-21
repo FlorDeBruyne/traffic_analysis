@@ -1,4 +1,5 @@
-import os, time, base64, logging, threading
+import os, time, base64, logging
+from threading import Thread
 from datetime import datetime
 import cv2 as cv
 from PIL import Image
@@ -14,12 +15,6 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-def threaded(fn):
-    def wrapper(*args, **kwargs):
-        thread = threading.Thread(target=fn, args=args, kwargs=kwargs)
-        thread.start()
-        return thread
-    return wrapper
 
 class DataService():
 
@@ -62,67 +57,116 @@ class DataService():
         else:
             return "test"
     
+    def _encode_image(self, frame):
+        success, buffer = cv.imencode(".png", frame)
+        if not success:
+            logger.warning("Image encoding failed.")
+            return None
+        return base64.b64encode(buffer).decode('utf-8')
 
-    @threaded
-    def store_inference_data(self, frames: list, objects: list = None):
-        """
-        Store send images to the mongodb collection.
+    def _prepare_data(self, item, frames, timestamp):
+        base_image = self._encode_image(frames[0])
+        anno_image = self._encode_image(frames[1])
+
+        if not base_image or not anno_image:
+            return None
+
+        return {
+            "confidence": item[0][0].item(),
+            "class_id": item[1][0].item(),
+            "class_name": item[2],
+            "xyxy": item[3][0].tolist(),
+            "xyxyn": item[4][0].tolist(),
+            "xywh": item[5][0].tolist(),
+            "box_width": item[5][0].tolist()[2],
+            "box_height": item[5][0].tolist()[3],
+            "xywhn": item[6][0].tolist(),
+            "speed": item[7],
+            "masks": item[8],
+            "json": item[9],
+            "dmy": self.dmy,
+            "time_stamp": timestamp,
+            "base_image": base_image,
+            "annotated_image": anno_image,
+            "split": self._assign_split(),
+            "is_trained": False
+        }
+    
+    def process_objects(self, objects, frames, timestamp):
+        for item in objects:
+            logger.info("Starting image encoding")
+            data = self._prepare_data(item, frames, timestamp)
+            if data is None:
+                continue
+
+            logger.info("Transfering data")
+            start_time = time.process_time()
+            self.client.insert_data(data)
+            stop_time = time.process_time()
+            logger.info(f"Transfer complete, time {stop_time - start_time}")
+
+    
+
+    # @Thread
+    # def store_inference_data(self, frames: list, objects: list = None):
+    #     """
+    #     Store send images to the mongodb collection.
         
-        Args:
-            frames (list): Images to be saved
-            objects (list): Objects in these images
-        """
-        timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
+    #     Args:
+    #         frames (list): Images to be saved
+    #         objects (list): Objects in these images
+    #     """
+    #     timestamp = datetime.now().strftime("%d_%m_%y_%H_%M_%S")
 
-        if not self.client:
-            self.client = MongoInstance("traffic_analysis")
-            self.client.select_collection("vehicle")
+    #     if not self.client:
+    #         self.client = MongoInstance("traffic_analysis")
+    #         self.client.select_collection("vehicle")
 
-        if objects:
-            for item in objects:  
+    #     if objects:
+    #         for item in objects:  
 
-                logger.info("starting image encoding")
-                base_success, base_buffer = cv.imencode(".png", frames[0])
-                anno_succes, anno_buffer = cv.imencode(".png", frames[1])
+    #             logger.info("starting image encoding")
+    #             base_success, base_buffer = cv.imencode(".png", frames[0])
+    #             anno_succes, anno_buffer = cv.imencode(".png", frames[1])
 
-                if not base_success or not anno_succes:
-                    logger.warning("Image encoding failed.")
-                    continue
+    #             if not base_success or not anno_succes:
+    #                 logger.warning("Image encoding failed.")
+    #                 continue
 
-                logger.info("Image encoding complete")
+    #             logger.info("Image encoding complete")
 
-                base_image = base64.b64encode(base_buffer).decode('utf-8')
-                anno_image = base64.b64encode(anno_buffer).decode('utf-8')
+    #             base_image = base64.b64encode(base_buffer).decode('utf-8')
+    #             anno_image = base64.b64encode(anno_buffer).decode('utf-8')
 
-                logger.info("Transfering data")
-                start_time = time.process_time()
+    #             logger.info("Transfering data")
+    #             start_time = time.process_time()
 
-                self.client.insert_data({
-                    "confidence": item[0][0].item(),
-                    "class_id": item[1][0].item(),
-                    "class_name": item[2],
-                    "xyxy": item[3][0].tolist(),
-                    "xyxyn": item[4][0].tolist(),
-                    "xywh": item[5][0].tolist(),
-                    "box_width": item[5][0].tolist()[2],
-                    "box_height": item[5][0].tolist()[3],
-                    "xywhn": item[6][0].tolist(),
-                    "speed": item[7],
-                    "masks": item[8],
-                    "json": item[9],
-                    "dmy": self.dmy,
-                    "time_stamp": timestamp,
-                    "base_image":base_image,
-                    "annotated_image": anno_image,
-                    "split": self._assign_split(),
-                    "is_trained": False
-                                     })
+    #             self.client.insert_data({
+    #                 "confidence": item[0][0].item(),
+    #                 "class_id": item[1][0].item(),
+    #                 "class_name": item[2],
+    #                 "xyxy": item[3][0].tolist(),
+    #                 "xyxyn": item[4][0].tolist(),
+    #                 "xywh": item[5][0].tolist(),
+    #                 "box_width": item[5][0].tolist()[2],
+    #                 "box_height": item[5][0].tolist()[3],
+    #                 "xywhn": item[6][0].tolist(),
+    #                 "speed": item[7],
+    #                 "masks": item[8],
+    #                 "json": item[9],
+    #                 "dmy": self.dmy,
+    #                 "time_stamp": timestamp,
+    #                 "base_image":base_image,
+    #                 "annotated_image": anno_image,
+    #                 "split": self._assign_split(),
+    #                 "is_trained": False
+    #                                  })
                 
-                stop_time = time.process_time()
-                logger.info(f"Transfer complete, time {stop_time-start_time}")
+    #             stop_time = time.process_time()
+    #             logger.info(f"Transfer complete, time {stop_time-start_time}")
 
 
-    @threaded
+    @Thread
     def store_yearly_data(self, input_doc):
         """
         Store aggregated yearly data to the MongoDB collection.
@@ -161,7 +205,7 @@ class DataService():
             logger.error(f"Failed to store yearly data: {str(e)}")
 
 
-    @threaded
+    @Thread
     def store_monthly_data(self, input_doc):
         """
         Store aggregated monthly data to the MongoDB collection.
@@ -200,7 +244,7 @@ class DataService():
             logger.error(f"Failed to store monthly data: {str(e)}")
 
 
-    @threaded
+    @Thread
     def store_dayly_data(self, input_doc):
         """
         Store aggregated dayly data to the MongoDB collection.
@@ -239,7 +283,7 @@ class DataService():
             logger.error(f"Failed to store dayly data: {str(e)}")
 
 
-    @threaded
+    @Thread
     def store_category_data(self, input_doc: dict):
         """
         Store aggregated category data to the MongoDB collection.
