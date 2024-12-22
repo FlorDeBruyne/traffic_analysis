@@ -1,17 +1,13 @@
-import logging
-import os
-from service.webcam_controller import WebcamController
+from utils.capture_utils import main
+from service.image_processing import ImageProcessor
 
-def run_streamlit():
-    """
-    Run the Streamlit app from within the Capture file.
-    """
-    os.system("streamlit run stream_webpage.py --server.address 0.0.0.0 --server.port 8501")
 
 if __name__ == "__main__":
-    logger = logging.getLogger(__name__)
+    # Example usage
+    processor = ImageProcessor()
+    processor.extract_untrained_images(output_dir="../output_images", coco_output_file="coco_dataset.json")
 
-    webcam = WebcamController()
-    logging.basicConfig(filename='logs/info_capture.log', level=logging.INFO)
-    logger.info("Started")
-    webcam.stream_video()
+
+
+
+    # main()

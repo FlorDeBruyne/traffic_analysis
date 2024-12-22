@@ -22,6 +22,7 @@ class MongoInstance(MongoSession):
     def select_collection(self, name:str):
         if self.database[name] == None:
              self.database.create_collection(name)
+             self.collection = self.database[name]
         else:
              self.collection = self.database[name]
         

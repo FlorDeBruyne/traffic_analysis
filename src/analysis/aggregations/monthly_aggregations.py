@@ -1,11 +1,11 @@
 from db.mongo_instance import MongoInstance
-from service.data_service import DataService
+from service.data_storage import DataStorage
 
 import logging
 
 logger = logging.getLogger(__name__)
 
-data_service = DataService(client="monthly_metrics", augment=False)
+data_service = DataStorage()
 
 client = MongoInstance("traffic_analysis")
 data = client.select_collection("vehicle")

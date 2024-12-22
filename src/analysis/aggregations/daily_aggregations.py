@@ -1,23 +1,21 @@
 from db.mongo_instance import MongoInstance
-from service.data_service import DataService
+from service.data_storage import DataStorage
 
 import logging
 
 logger = logging.getLogger(__name__)
 
-data_service = DataService(client="dayly_metrics", augment=False)
+data_service = DataStorage()
 
 client = MongoInstance("traffic_analysis")
 data = client.select_collection("vehicle")
 
-def analyze_dayly(collection):
+def analyze_daily(collection):
     """
-    CHANGE
     Perform comprehensive analysis of object classes in the database
     
     :param collection: PyMongo collection object
     :return: DataFrame with detailed class analysis
-    CHANGE
     """
 
 
@@ -193,7 +191,7 @@ def analyze_dayly(collection):
     # Print results
     for doc in results:
         try:
-            data_service.store_dayly_data(doc)
+            data_service.store_daily_data(doc)
 
         except Exception as e:
             print(f"Failed to store dayly data: {str(e)}")
@@ -206,7 +204,7 @@ def main_day():
     client.select_collection("vehicle")
     
     # Perform analysis
-    analysis_results = analyze_dayly(client)
+    analysis_results = analyze_daily(client)
     
     # Display results
     print(analysis_results)

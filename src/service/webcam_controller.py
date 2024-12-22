@@ -11,7 +11,7 @@ from service.inference_service import Inference
 from service.data_service import DataService
 
 load_dotenv()
-data = DataService(client="vehicle", augment=False)
+data = DataService(client="traffic_analysis")
 inf = Inference()
 
 def threaded(fn):
@@ -69,7 +69,7 @@ class WebcamController():
             for detection, unannotated_frame, annotated_frame, objects in inf.detect(frame):
                 if detection:
                     # Store the detected data
-                    data.store_inference_data([unannotated_frame, annotated_frame], objects)
+                    data.process_objects([unannotated_frame, annotated_frame], objects)
 
                 # Display the annotated frame
                 cv.imshow("Frame", annotated_frame)
