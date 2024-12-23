@@ -1,4 +1,3 @@
-import logging
 import os
 from service.webcam_controller import WebcamController
 
@@ -10,8 +9,6 @@ def run_streamlit():
     os.system("streamlit run stream_webpage.py --server.address 0.0.0.0 --server.port 8501")
 
 def main():
-    logger = logging.getLogger(__name__)
-
     webcam = WebcamController()
     webcam.camera_setup()
     logging.basicConfig(filename='logs/info_capture.log', level=logging.INFO)

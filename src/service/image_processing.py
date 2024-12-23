@@ -5,12 +5,13 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 from io import BytesIO
-from typing import List, Dict, Optional
+from typing import List, Iterator, Dict, Optional, Tuple
 from dataclasses import dataclass
 from db.mongo_instance import MongoInstance
 from service.data_augmentation import get_transformations
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
+import datetime
 import json
 
 logger = logging.getLogger(__name__)
@@ -98,101 +99,219 @@ class ImageProcessor:
         if augment:
             self.train_transform, self.val_transform = get_transformations()
         
-        self.target_size = (640, 640)
-
+        # self.target_size = (640, 640)
+        self.batch_size = 10
 
     def process_dataset(self, output_dir: str, coco_output_file: str, untrained_only: bool = True):
         """Main processing pipeline"""
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        query = {"is_trained": False} if untrained_only else {}
-        documents = self.client.retrieve_data(query)
+        coco_data = self._initialize_coco_data()
 
-        if not documents:
+        query = {"is_trained": False} if untrained_only else {}
+        total_documents = self.client.count_documents(query)
+        processed_count = 0
+
+        if not total_documents:
             logger.info("No Documents found in the database.")
             return
         
-        image_documents = self._prepare_documents(documents)
-
-        self._process_images_parallel(image_documents, output_dir)
-
-        self._generate_coco_json(image_documents, output_dir)
-
-    def _prepare_documents(self, raw_documents: List[Dict]) -> List[ImageDocument]:
-        """Convert raw MongoDB documents tot ImageDocument objects"""
-        return [
-            ImageDocument(
-                image_id=idx + 1,
-                base_image=doc["base_image"],
-                class_name=doc.get("class_name", "UNKNOWN"),
-                split=doc.get("split", "train"),
-                timestamp=doc.get("time_stamp", "UNKNOWN"),
-                bbox=doc.get("xywh", [0.0, 0.0, 0.0, 0.0])
-            )
-            for idx, doc in enumerate(raw_documents)
-            if doc.get("base_image")
-        ]
-
-
-    def _process_single_image(self, doc: ImageDocument, output_dir: Path) -> Optional[ImageDocument]:
-        """Process a single image document"""
         try:
-            image_data = base64.b64decode(doc.base_image)
-            image = Image.open(BytesIO(image_data))
-            processed_image = self._preprocess_image(image, doc.split)
+            for batch in self._get_document_batch(query):
+                self._process_batch(batch, output_dir, coco_data)
+                processed_count += len(batch)
+                logger.info(f"Processed {processed_count}/{total_documents} images")
+        
+        except Exception as e:
+            logger.error(f"Error during processing: {e}")
+            raise
+        finally:
+            self._generate_coco_json(image_documents, output_dir)
+        
+    def _get_document_batch(self, query: Dict) -> Iterator[list]:
+        """Get documents in batches to prevent memory overload"""
+        cursor = self.client.find(query)
+        current_batch = []
 
-            class_dir = output_dir / doc.class_name / doc.split
-            class_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            for doc in cursor:
+                current_batch.append(doc)
+                if len(current_batch) >= self.batch_size:
+                    yield current_batch
+                    current_batch = []
             
-            file_name = f"base_{doc.timestamp}_id_{doc.image_id}.png"
-            file_path = class_dir / file_name
-            processed_image.save(file_path, format="PNG")
+            if current_batch:
+                yield current_batch
+        
+        finally:
+            cursor.close()
 
-            doc.file_name = str(file_path)
-            doc.height = processed_image.height
-            doc.width = processed_image.width
+    def _process_batch(self, batch: list, output_dir: Path, coco_data: Dict):
+        """Process a batch of documents"""
+        for doc in batch:
+            try:
+                processed_doc = self._process_single_document(doc, output_dir)
+                if processed_doc:
+                    self._update_coco_data(coco_data, processed_doc)
+                
+            except Exception as e:
+                logger.error(f"Error processing document {doc.get('_id')}: {e}")
+                continue
+            
+            finally:
+                if 'base_image' in doc:
+                    doc['base_image'] = None
+                if 'annotated_image' in doc:
+                    doc['annotated_image'] = None
 
-            return doc
+    def _maintain_aspect_ratio(self, image: Image.Image, max_size: Optional[Tuple[int, int]] = None) -> Image.Image:
+        """
+        Resize image while maintaining aspect ratio.
+        If max_size is provided, ensure image doesn't exceed these dimensions.
+        """
+        width, height = image.size
+        
+        if max_size:
+            max_width, max_height = max_size
+            # Calculate scaling factor to fit within max dimensions
+            scale = min(max_width/width, max_height/height)
+            
+            if scale < 1:  # Only resize if image is too large
+                new_width = int(width * scale)
+                new_height = int(height * scale)
+                return image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        
+        return image
+
+    def _preprocess_image(self, image: Image.Image, split: str) -> Image.Image:
+        """
+        Preprocess a single image with proper type and size handling
+        """
+        # Convert to RGB if needed
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        
+        # Keep original size or maintain aspect ratio if needed
+        processed_image = self._maintain_aspect_ratio(image)
+        
+        # Convert to numpy for transformations
+        image_array = np.array(processed_image)
+        
+        # Apply transformations if needed
+        transformed_image = image_array
+        try:
+            if split == "train" and hasattr(self, 'train_transform'):
+                transformed = self.train_transform(image=image_array)
+                transformed_image = transformed['image']
+            elif split == "valid" and hasattr(self, 'val_transform'):
+                transformed = self.val_transform(image=image_array)
+                transformed_image = transformed['image']
+        except Exception as e:
+            logger.warning(f"Transform failed, using original image: {e}")
+            transformed_image = image_array
+
+        # Ensure correct data type
+        if transformed_image.dtype != np.uint8:
+            transformed_image = (transformed_image * 255).clip(0, 255).astype(np.uint8)
+
+        return Image.fromarray(transformed_image, mode='RGB')
+
+    def _process_single_document(self, doc: Dict, output_dir: Path) -> Optional[Dict]:
+        """Process a single document with proper size handling"""
+        try:
+            base_image = doc.get("base_image")
+            if not base_image:
+                return None
+
+            doc_info = {
+                "class_name": doc.get("class_name", "UNKNOWN"),
+                "split": doc.get("split", "train"),
+                "timestamp": doc.get("time_stamp", "UNKNOWN"),
+                "bbox": doc.get("xywh", [0, 0, 0, 0]),
+                "image_id": doc.get("_id")
+            }
+
+            # Decode and process image
+            image_data = base64.b64decode(base_image)
+            with Image.open(BytesIO(image_data)) as img:
+                try:
+                    processed_img = self._preprocess_image(img, doc_info["split"])
+                except Exception as e:
+                    logger.error(f"Image preprocessing failed: {e}")
+                    processed_img = self._maintain_aspect_ratio(img)  # Fallback to simple resize
+
+                # Save image with original dimensions
+                class_dir = output_dir / doc_info["class_name"] / doc_info["split"]
+                class_dir.mkdir(parents=True, exist_ok=True)
+                
+                file_name = f"base_{doc_info['timestamp']}_id_{doc_info['image_id']}.png"
+                file_path = class_dir / file_name
+                
+                # Save with high quality
+                processed_img.save(file_path, format="PNG", quality=100)
+                
+                doc_info.update({
+                    "file_name": str(file_path),
+                    "height": processed_img.height,
+                    "width": processed_img.width
+                })
+
+            return doc_info
 
         except Exception as e:
-            logger.error(f"Failed to process image {doc.image_id}: {e}")
+            logger.error(f"Failed to process document: {e}")
             return None
 
 
-    def _process_images_parallel(self, documents: List[ImageDocument], output_dir: Path):
-        """Process images in parallel using ThreadPoolExecutor"""
-        with ThreadPoolExecutor() as executor:
-            futures = [
-                executor.submit(self._process_single_image, doc, output_dir)
-                for doc in documents
-            ]
-
-            processed_docs = []
-            for future in tqdm(futures, desc="Processing images"):
-                if doc := future.result():
-                    processed_docs.append(doc)
-
-        return processed_docs
 
 
-    def _preprocess_image(self, image: Image.Image, split: str) -> Image.Image:
-        """Preprocess a single image"""
-        resized_image = image.resize(self.target_size)
-        image_array = np.array(resized_image)
+    def _initialize_coco_data(self) -> Dict:
+        """Initialize COCO data structure"""
+        return {
+            "info": {
+                "description": "Generated COCO Dataset",
+                "year": datetime.datetime.now().year,
+                "version": "1.0",
+                "contributor": "Automated Script",
+                "date_created": datetime.datetime.now().date().isoformat()
+            },
+            "licenses": [],
+            "images": [],
+            "annotations": [],
+            "categories": {}
+        }
 
-        if split == "train" and hasattr(self, 'train_transform'):
-            image_array = self.train_transform(image=image_array)['image']
-        elif split == "valid" and hasattr(self, 'val_transform'):
-            image_array = self.val_transform(image=image_array)['image']
+    def _update_coco_data(self, coco_data: Dict, doc_info: Dict):
+        """Update COCO data with processed document information"""
+        coco_data["images"].append({
+            "id": doc_info["image_id"],
+            "file_name": doc_info["file_name"],
+            "height": doc_info["height"],
+            "width": doc_info["width"]
+        })
 
-        return Image.fromarray(image_array)
+        category_name = doc_info["class_name"]
+        if category_name not in coco_data["categories"]:
+            category_id = len(coco_data["categories"]) + 1
+            coco_data["categories"][category_name] = {
+                "id": category_id,
+                "name": category_name,
+                "supercategory": "none"
+            }
 
+        coco_data["annotations"].append({
+            "id": len(coco_data["annotations"]) + 1,
+            "image_id": doc_info["image_id"],
+            "category_id": coco_data["categories"][category_name]["id"],
+            "bbox": doc_info["bbox"],
+            "area": doc_info["bbox"][2] * doc_info["bbox"][3],
+            "iscrowd": 0
+        })
 
-    def _generate_coco_json(self, documents: List[ImageDocument], output_file: str):
-        """Generate COCO JSON file"""
-        formatter = COCOFormatter()
-        coco_data = formatter.create_coco_format(documents)
+    def _save_coco_json(self, coco_data: Dict, output_file: str):
+        """Save COCO data to JSON file"""
+        coco_data["categories"] = list(coco_data["categories"].values())
         
         with open(output_file, 'w') as f:
             json.dump(coco_data, f, indent=4)
