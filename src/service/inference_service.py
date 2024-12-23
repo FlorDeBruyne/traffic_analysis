@@ -23,7 +23,7 @@ class Inference():
             else:
                 self.path = os.getenv("DET_SMALL")
 
-        self.model = YOLO(self.path, task=task, )
+        self.model = YOLO(self.path, task=task )
 
 
     def detect(self, frame):

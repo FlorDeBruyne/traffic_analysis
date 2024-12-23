@@ -4,3 +4,4 @@
 /models
 **/output_images
 capture.log
+/venv
