@@ -127,7 +127,7 @@ class ImageProcessor:
             logger.error(f"Error during processing: {e}")
             raise
         finally:
-            self._generate_coco_json(image_documents, output_dir)
+            self._save_coco_json(total_documents, output_dir)
         
     def _get_document_batch(self, query: Dict) -> Iterator[list]:
         """Get documents in batches to prevent memory overload"""
@@ -204,7 +204,7 @@ class ImageProcessor:
             if split == "train" and hasattr(self, 'train_transform'):
                 transformed = self.train_transform(image=image_array)
                 transformed_image = transformed['image']
-            elif split == "valid" and hasattr(self, 'val_transform'):
+            elif split == "validation" and hasattr(self, 'val_transform'):
                 transformed = self.val_transform(image=image_array)
                 transformed_image = transformed['image']
         except Exception as e:
@@ -310,7 +310,16 @@ class ImageProcessor:
         })
 
     def _save_coco_json(self, coco_data: Dict, output_file: str):
-        """Save COCO data to JSON file"""
+        """
+        Save COCO data to JSON file.
+
+        Parameters:
+        coco_data (Dict): The COCO formatted data to save.
+        output_file (str): The path to the output JSON file.
+
+        Returns:
+        None
+        """
         coco_data["categories"] = list(coco_data["categories"].values())
         
         with open(output_file, 'w') as f:
