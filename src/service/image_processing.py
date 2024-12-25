@@ -51,10 +51,12 @@ class COCOFormatter:
 
     def create_coco_format(self, documents: List[ImageDocument]) -> Dict:
         """Convert documents to COCO format"""
-
+        processed_docs = []
         for doc in documents:
-            if hasattr(doc.image_id, '__str__'):
-                doc.image_id = str(doc.image_id)
+            if doc is not None:
+                if hasattr(doc.image_id, '__str__'):
+                    doc.image_id = str(doc.image_id)
+                processed_docs.append(doc)
 
         return {
             "info": self._create_info(),
@@ -97,7 +99,7 @@ class COCOFormatter:
  
 
 class ImageProcessor:
-    def __init__(self, db_name="traffic_analysis", collection_name="raw_data", augment: bool = True):
+    def __init__(self, db_name="traffic_analysis", collection_name="vehicle", augment: bool = True):
         self.client = MongoInstance(db_name)
         self.client.select_collection(collection_name)
         self.coco_formatter = COCOFormatter()
@@ -113,7 +115,7 @@ class ImageProcessor:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        coco_data = self._initialize_coco_data()
+        # coco_data = self._initialize_coco_data()
 
         processed_documents = []
 
@@ -127,7 +129,7 @@ class ImageProcessor:
         
         try:
             for batch in self._get_document_batch(query):
-                batch_docs = self._process_batch(batch, output_dir, coco_data)
+                batch_docs = self._process_batch(batch, output_dir)
                 processed_documents.extend([doc for doc in batch_docs if doc is not None])
                 processed_count += len(batch)
                 logger.info(f"Processed {processed_count}/{total_documents} images")
@@ -137,9 +139,11 @@ class ImageProcessor:
             raise
 
         finally:
-            coco_data = self.coco_formatter.create_coco_format(processed_documents)
-            self._save_coco_json(coco_data, coco_output_file)
+            if processed_documents:
+                coco_data = self.coco_formatter.create_coco_format(processed_documents)
+                self._save_coco_json(coco_data, coco_output_file)
         
+
     def _get_document_batch(self, query: Dict) -> Iterator[list]:
         """Get documents in batches to prevent memory overload"""
         cursor = self.client.find(query)
@@ -158,7 +162,8 @@ class ImageProcessor:
         finally:
             cursor.close()
 
-    def _process_batch(self, batch: list, output_dir: Path, coco_data: Dict):
+
+    def _process_batch(self, batch: list, output_dir: Path) -> List[ImageDocument]:
         """Process a batch of documents"""
         processed_docs = []
 
@@ -166,7 +171,18 @@ class ImageProcessor:
             try:
                 processed_doc = self._process_single_document(doc, output_dir)
                 if processed_doc:
-                    self._update_coco_data(coco_data, processed_doc)
+                    image_doc = ImageDocument(
+                        image_id=processed_doc["image_id"],
+                        base_image="",  # Empty as we don't need to store the image data
+                        class_name=processed_doc["class_name"],
+                        split=processed_doc["split"],
+                        timestamp=processed_doc["timestamp"],
+                        bbox=processed_doc["bbox"],
+                        height=processed_doc["height"],
+                        width=processed_doc["width"],
+                        file_name=processed_doc["file_name"]
+                    )
+                    processed_docs.append(image_doc)
 
                 
             except Exception as e:
@@ -178,6 +194,8 @@ class ImageProcessor:
                     doc['base_image'] = None
                 if 'annotated_image' in doc:
                     doc['annotated_image'] = None
+        
+        return processed_docs
 
     def _maintain_aspect_ratio(self, image: Image.Image, max_size: Optional[Tuple[int, int]] = None) -> Image.Image:
         """
@@ -251,6 +269,7 @@ class ImageProcessor:
             with Image.open(BytesIO(image_data)) as img:
                 try:
                     processed_img = self._preprocess_image(img, doc_info["split"])
+
                 except Exception as e:
                     logger.error(f"Image preprocessing failed: {e}")
                     processed_img = self._maintain_aspect_ratio(img)  # Fallback to simple resize
@@ -276,8 +295,6 @@ class ImageProcessor:
         except Exception as e:
             logger.error(f"Failed to process document: {e}")
             return None
-
-
 
 
     def _initialize_coco_data(self) -> Dict:
