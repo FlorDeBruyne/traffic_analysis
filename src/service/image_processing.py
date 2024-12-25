@@ -51,6 +51,11 @@ class COCOFormatter:
 
     def create_coco_format(self, documents: List[ImageDocument]) -> Dict:
         """Convert documents to COCO format"""
+
+        for doc in documents:
+            if hasattr(doc.image_id, '__str__'):
+                doc.image_id = str(doc.image_id)
+
         return {
             "info": self._create_info(),
             "licenses": [],
@@ -72,7 +77,7 @@ class COCOFormatter:
 
     def _create_image_entry(self, doc: ImageDocument) -> Dict:
         return {
-            "id": doc.image_id,
+            "id": str(doc.image_id),
             "file_name": doc.file_name,
             "height": doc.height,
             "width": doc.width
@@ -81,7 +86,7 @@ class COCOFormatter:
     def _create_annotation_entry(self, doc: ImageDocument) -> Dict:
         annotation = {
             "id": self.next_annotation_id,
-            "image_id": doc.image_id,
+            "image_id": str(doc.image_id),
             "category_id": self.get_category_id(doc.class_name),
             "bbox": doc.bbox,
             "area": doc.bbox[2] * doc.bbox[3], # Width * height
@@ -92,14 +97,15 @@ class COCOFormatter:
  
 
 class ImageProcessor:
-    def __init__(self, db_name="traffic_analysis", collection_name="vehicle", augment: bool = True):
+    def __init__(self, db_name="traffic_analysis", collection_name="raw_data", augment: bool = True):
         self.client = MongoInstance(db_name)
         self.client.select_collection(collection_name)
+        self.coco_formatter = COCOFormatter()
 
         if augment:
             self.train_transform, self.val_transform = get_transformations()
         
-        # self.target_size = (640, 640)
+        # self.target_size = (640, 640)vehicle
         self.batch_size = 10
 
     def process_dataset(self, output_dir: str, coco_output_file: str, untrained_only: bool = True):
@@ -108,6 +114,8 @@ class ImageProcessor:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         coco_data = self._initialize_coco_data()
+
+        processed_documents = []
 
         query = {"is_trained": False} if untrained_only else {}
         total_documents = self.client.count_documents(query)
@@ -119,15 +127,18 @@ class ImageProcessor:
         
         try:
             for batch in self._get_document_batch(query):
-                self._process_batch(batch, output_dir, coco_data)
+                batch_docs = self._process_batch(batch, output_dir, coco_data)
+                processed_documents.extend([doc for doc in batch_docs if doc is not None])
                 processed_count += len(batch)
                 logger.info(f"Processed {processed_count}/{total_documents} images")
         
         except Exception as e:
             logger.error(f"Error during processing: {e}")
             raise
+
         finally:
-            self._save_coco_json(total_documents, output_dir)
+            coco_data = self.coco_formatter.create_coco_format(processed_documents)
+            self._save_coco_json(coco_data, coco_output_file)
         
     def _get_document_batch(self, query: Dict) -> Iterator[list]:
         """Get documents in batches to prevent memory overload"""
@@ -149,11 +160,14 @@ class ImageProcessor:
 
     def _process_batch(self, batch: list, output_dir: Path, coco_data: Dict):
         """Process a batch of documents"""
+        processed_docs = []
+
         for doc in batch:
             try:
                 processed_doc = self._process_single_document(doc, output_dir)
                 if processed_doc:
                     self._update_coco_data(coco_data, processed_doc)
+
                 
             except Exception as e:
                 logger.error(f"Error processing document {doc.get('_id')}: {e}")
@@ -320,8 +334,17 @@ class ImageProcessor:
         Returns:
         None
         """
-        coco_data["categories"] = list(coco_data["categories"].values())
+        class COCOEncoder(json.JSONEncoder):
+            def default(self, obj):
+                from bson import ObjectId
+                if isinstance(obj, ObjectId):
+                    return str(obj)
+                if isinstance(obj, Path):
+                    return str(obj)
+                return super().default(obj)
+
+        # coco_data["categories"] = list(coco_data["categories"].values())
         
         with open(output_file, 'w') as f:
-            json.dump(coco_data, f, indent=4)
+            json.dump(coco_data, f, indent=4, cls=COCOEncoder)
         logger.info(f"COCO dataset JSON saved to {output_file}")
