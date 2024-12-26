@@ -1,5 +1,5 @@
 from ultralytics import YOLO
-from sklearn.metrics import precision_recall_fscore_support, average_precision_score, auc, mean_squared_error, accuracy_score
+from sklearn.metrics import recall_score, precision_score, f1_score, average_precision_score, auc, mean_squared_error, accuracy_score, precision_recall_curve
 import numpy as np
 from db.mongo_instance import MongoInstance
 import matplotlib.pyplot as plt
@@ -10,7 +10,7 @@ from typing import List, Dict, Union, Tuple
 import cv2
 
 class ModelEvaluator:
-    def __init__(self, model_path: str, confidence_threshold: float = 0.25, db_name: str = "traffic_analysis", collection_name: str = "evaluation_metrics"):
+    def __init__(self, model_path: str, confidence_threshold: float = 0.5, db_name: str = "traffic_analysis", collection_name: str = "evaluation_metrics"):
         """
         Initialize the YOLO model evaluator.
         
@@ -57,7 +57,10 @@ class ModelEvaluator:
                 # Convert bbox from xywh to xyxy
                 x, y, w, h = ann['bbox']
                 ground_truth[image_id]['boxes'].append([x, y, x + w, y + h])
-                ground_truth[image_id]['classes'].append(ann['category_id'])
+                for category in coco_data['categories']:
+                    if category['id'] == ann['category_id']:
+
+                        ground_truth[image_id]['classes'].append((category['id'], category['name']))
         
         # Prepare a list of ground truth dictionaries
         ground_truth_list = [
@@ -106,34 +109,91 @@ class ModelEvaluator:
     def evaluate_model(self, ground_truth: List[Dict], predictions: List[Dict]) -> Dict:
         """
         Evaluate model performance against ground truth.
-        
-        Args:
-            ground_truth: List of ground truth annotations
-            predictions: List of model predictions
-            
-        Returns:
-            Dictionary containing evaluation metrics
         """
-        # Initialize metrics storage
         metrics = {
             'per_class': {},
             'overall': {}
         }
         
+        # Get unique classes
+        all_classes = set()
+        for gt in ground_truth:
+            all_classes.update(gt['classes'])
+        
         # Calculate per-class metrics
-        y_true, y_pred = self._prepare_data_for_metrics(ground_truth, predictions)
-        precision, recall, f1, support = precision_recall_fscore_support(y_true, y_pred)
+        overall_true = []
+        overall_pred = []
+        overall_scores = []
+        
+        for class_id, class_name in all_classes:
+            y_true = []
+            y_pred = []
+            y_scores = []
+            
+            for gt, pred in zip(ground_truth, predictions):
+                gt_mask = np.array([cls[0] for cls in gt['classes']]) == class_id
+                pred_mask = np.array(pred['classes']) == class_id
+
+                # Add ground truth
+                for _ in range(sum(gt_mask)):
+                    if sum(pred_mask) > 0:
+                        y_true.append(1)
+                        y_pred.append(1)
+                        y_scores.append(max(pred['confidence'][pred_mask]))
+                    else:
+                        y_true.append(1)
+                        y_pred.append(0)
+                        y_scores.append(0)
+                
+                # Add false positives
+                for conf in pred['confidence'][pred_mask][sum(gt_mask):]:
+                    y_true.append(0)
+                    y_pred.append(1)
+                    y_scores.append(conf)
+            
+            if len(y_true) > 0:
+                precision = precision_score(y_true, y_pred)
+                recall = recall_score(y_true, y_pred)
+                f1 = f1_score(y_true, y_pred)
+                
+                # Calculate precision-recall curve for AUC
+                precisions, recalls, _ = precision_recall_curve(y_true, y_scores)
+                auc_score = auc(recalls, precisions)
+                
+                metrics['per_class'][str(class_name)] = {
+                    'accuracy': accuracy_score(y_true, y_pred),
+                    'mean_ap': self._calculate_map(y_true, y_pred),
+                    'average_iou': self._calculate_average_iou(y_true, y_pred),
+                    'mean_squared_error': mean_squared_error(y_true, y_pred),
+                    'auc': auc_score(precisions, recalls),
+                    'precision': precision,
+                    'recall': recall,
+                    'f1': f1,
+                    'auc': auc_score
+                }
+                
+                overall_true.extend(y_true)
+                overall_pred.extend(y_pred)
+                overall_scores.extend(y_scores)
         
         # Calculate overall metrics
+        overall_precision = precision_score(overall_true, overall_pred)
+        overall_recall = recall_score(overall_true, overall_pred)
+        overall_f1 = f1_score(overall_true, overall_pred)
+        
+        # Calculate overall precision-recall curve for AUC
+        precisions, recalls, _ = precision_recall_curve(overall_true, overall_scores)
+        overall_auc = auc(recalls, precisions)
+        
         metrics['overall'] = {
-            'accuracy': accuracy_score(y_true, y_pred),
+            'accuracy': accuracy_score(overall_true, overall_pred),
             'mean_ap': self._calculate_map(ground_truth, predictions),
             'average_iou': self._calculate_average_iou(ground_truth, predictions),
-            'mean_squared_error': mean_squared_error(y_true, y_pred),
-            'auc': auc(recall, precision),
-            'precision': np.mean(precision),
-            'recall': np.mean(recall),
-            'f1': np.mean(f1),
+            'mean_squared_error': mean_squared_error(overall_true, overall_pred),
+            'auc': overall_auc,
+            'precision': overall_precision,
+            'recall': overall_recall,
+            'f1': overall_f1
         }
         
         self.evaluation_results = metrics
@@ -155,8 +215,8 @@ class ModelEvaluator:
         
         for gt, pred in zip(ground_truth, predictions):
             # Match predictions to ground truth using IoU
-            matched_classes = self._match_boxes(gt['boxes'], pred['boxes'], gt['classes'], pred['classes'])
-            y_true.extend(gt['classes'])
+            matched_classes = self._match_boxes(gt['boxes'], pred['boxes'], [cls[0] for cls in gt['classes']], pred['classes'])
+            y_true.extend([cls[0] for cls in gt['classes']])
             y_pred.extend(matched_classes)
             
         return np.array(y_true), np.array(y_pred)
@@ -238,36 +298,39 @@ class ModelEvaluator:
     def _calculate_map(self, ground_truth: List[Dict], predictions: List[Dict]) -> float:
         """
         Calculate mean Average Precision.
-        
-        Args:
-            ground_truth: List of ground truth annotations
-            predictions: List of model predictions
-            
-        Returns:
-            mAP score
         """
-        # Simplified mAP calculation
         aps = []
-        for class_id in np.unique(np.concatenate([gt['classes'] for gt in ground_truth])):
+        for class_id in np.unique(np.concatenate([[cls[0] for cls in gt['classes'] for gt in ground_truth])):
             y_true = []
             y_scores = []
             
             for gt, pred in zip(ground_truth, predictions):
-                gt_mask = gt['classes'] == class_id
-                pred_mask = pred['classes'] == class_id
+                gt_mask = np.array([cls[0] for cls in gt['classes']]) == class_id
+                pred_mask = np.array(pred['classes']) == class_id
                 
-                y_true.extend([1] * sum(gt_mask))
-                y_true.extend([0] * (sum(pred_mask) - sum(gt_mask)))
+                # For each ground truth box of this class
+                for _ in range(sum(gt_mask)):
+                    if sum(pred_mask) > 0:
+                        # Add the highest confidence prediction
+                        y_true.append(1)
+                        y_scores.append(max(pred['confidence'][pred_mask]))
+                    else:
+                        # No prediction for this ground truth
+                        y_true.append(1)
+                        y_scores.append(0)
                 
-                y_scores.extend(pred['confidence'][pred_mask])
+                # Add false positives
+                for conf in pred['confidence'][pred_mask][sum(gt_mask):]:
+                    y_true.append(0)
+                    y_scores.append(conf)
             
             if len(y_true) > 0 and len(y_scores) > 0:
                 ap = average_precision_score(y_true, y_scores)
                 aps.append(ap)
-                
+        
         return np.mean(aps) if aps else 0
     
-    def  save_evaluations(self, save_path: str = "evaluation_results.json"):
+    def save_evaluations(self, save_path: str = "evaluation_results.json"):
         """
         Save evaluation results to a JSON file.
         
@@ -276,17 +339,26 @@ class ModelEvaluator:
         """
         if not self.evaluation_results:
             raise ValueError("No evaluation results to save. Run evaluate_model first.")
-            
+
+        def _convert_numpy(obj):
+            if isinstance(obj, (np.integer, np.floating)):
+                return float(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, dict):
+                return {key: _convert_numpy(value) for key, value in obj.items()}
+            elif isinstance(obj, list):
+                return [_convert_numpy(item) for item in obj]
+            return obj
+                
         results = {
             'timestamp': datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
             'confidence_threshold': self.confidence_threshold,
-            'metrics': self.evaluation_results
+            'metrics': _convert_numpy(self.evaluation_results)
         }
 
-        self.db_client.insert_one(results)
+        self.client.insert_data(results)
         
-        with open(save_path, 'w') as f:
-            json.dump(results, f, indent=4)
             
     def visualize_predictions(self, image_path: str, prediction: Dict, save_path: str = None):
         """
