@@ -1,6 +1,7 @@
 from ultralytics import YOLO
 from sklearn.metrics import precision_recall_fscore_support, average_precision_score, auc, mean_squared_error, accuracy_score
 import numpy as np
+from db.mongo_instance import MongoInstance
 import matplotlib.pyplot as plt
 import json
 from datetime import datetime
@@ -9,7 +10,7 @@ from typing import List, Dict, Union, Tuple
 import cv2
 
 class ModelEvaluator:
-    def __init__(self, model_path: str, confidence_threshold: float = 0.25):
+    def __init__(self, model_path: str, confidence_threshold: float = 0.25, db_name: str = "traffic_analysis", collection_name: str = "evaluation_metrics"):
         """
         Initialize the YOLO model evaluator.
         
@@ -21,6 +22,50 @@ class ModelEvaluator:
         self.confidence_threshold = confidence_threshold
         self.evaluation_results = {}
         self.predictions = []
+        self.client = MongoInstance(db_name)
+        self.client.select_collection(collection_name)
+
+
+    def parse_coco_dataset(self, coco_file: str, split: str = 'test') -> Tuple[List[str], List[Dict]]:
+        """
+        Parse COCO dataset to extract image paths and ground truth for a specific split.
+        
+        Args:
+            coco_file: Path to the COCO dataset JSON file.
+            split: The split to filter images by (e.g., "test", "validation").
+        
+        Returns:
+            Tuple containing a list of image paths and a list of ground truth annotations.
+        """
+        with open(coco_file, 'r') as f:
+            coco_data = json.load(f)
+        
+        # Filter images based on split in the file name
+        split_images = {
+            img['id']: img['file_name']
+            for img in coco_data['images']
+            if split in img['file_name']
+        }
+        
+        # Extract ground truth annotations only for the filtered images
+        ground_truth = {}
+        for ann in coco_data['annotations']:
+            image_id = ann['image_id']
+            if image_id in split_images:
+                if image_id not in ground_truth:
+                    ground_truth[image_id] = {'boxes': [], 'classes': []}
+                # Convert bbox from xywh to xyxy
+                x, y, w, h = ann['bbox']
+                ground_truth[image_id]['boxes'].append([x, y, x + w, y + h])
+                ground_truth[image_id]['classes'].append(ann['category_id'])
+        
+        # Prepare a list of ground truth dictionaries
+        ground_truth_list = [
+            {'boxes': ground_truth[img_id]['boxes'], 'classes': ground_truth[img_id]['classes']}
+            for img_id in split_images.keys()
+        ]
+        
+        return list(split_images.values()), ground_truth_list
         
     def predict(self, images: List[Union[str, np.ndarray]]) -> List[Dict]:
         """
@@ -116,28 +161,53 @@ class ModelEvaluator:
             
         return np.array(y_true), np.array(y_pred)
     
-    def _calculate_iou(self, box1: np.ndarray, box2: np.ndarray) -> float:
+
+    def _match_boxes(self, gt_boxes: List[np.ndarray], pred_boxes: List[np.ndarray], gt_classes: List[int], pred_classes: List[int]) -> List[int]:
         """
-        Calculate Intersection over Union (IoU) between two boxes.
+        Match predicted boxes to ground truth boxes using IoU.
         
         Args:
-            box1: First bounding box [x1, y1, x2, y2]
-            box2: Second bounding box [x1, y1, x2, y2]
+            gt_boxes: List of ground truth bounding boxes
+            pred_boxes: List of predicted bounding boxes
+            gt_classes: List of ground truth classes
+            pred_classes: List of predicted classes
             
         Returns:
-            IoU score
+            List of matched predicted classes
         """
-        x1 = max(box1[0], box2[0])
-        y1 = max(box1[1], box2[1])
-        x2 = min(box1[2], box2[2])
-        y2 = min(box1[3], box2[3])
-        
-        intersection = max(0, x2 - x1) * max(0, y2 - y1)
-        box1_area = (box1[2] - box1[0]) * (box1[3] - box1[1])
-        box2_area = (box2[2] - box2[0]) * (box2[3] - box2[1])
-        
-        iou = intersection / (box1_area + box2_area - intersection + 1e-6)
-        return iou
+        matched_classes = [-1] * len(gt_boxes)
+        for i, gt_box in enumerate(gt_boxes):
+            ious = [self._calculate_iou(gt_box, pred_box) for pred_box in pred_boxes]
+            if ious:
+                max_iou_idx = np.argmax(ious)
+                if ious[max_iou_idx] > 0.5:  # IoU threshold for matching
+                    matched_classes[i] = pred_classes[max_iou_idx]
+        return matched_classes
+
+
+    def _calculate_iou(self, box1: np.ndarray, box2: np.ndarray) -> float:
+    
+            """
+            Calculate Intersection over Union (IoU) between two boxes.
+            
+            Args:
+                box1: First bounding box [x1, y1, x2, y2]
+                box2: Second bounding box [x1, y1, x2, y2]
+                
+            Returns:
+                IoU score
+            """
+            x1 = max(box1[0], box2[0])
+            y1 = max(box1[1], box2[1])
+            x2 = min(box1[2], box2[2])
+            y2 = min(box1[3], box2[3])
+            
+            intersection = max(0, x2 - x1) * max(0, y2 - y1)
+            box1_area = (box1[2] - box1[0]) * (box1[3] - box1[1])
+            box2_area = (box2[2] - box2[0]) * (box2[3] - box2[1])
+            
+            iou = intersection / (box1_area + box2_area - intersection + 1e-6)
+            return iou
     
     def _calculate_average_iou(self, ground_truth: List[Dict], predictions: List[Dict]) -> float:
         """
@@ -197,7 +267,7 @@ class ModelEvaluator:
                 
         return np.mean(aps) if aps else 0
     
-    def save_evaluations(self, save_path: str = "evaluation_results.json"):
+    def  save_evaluations(self, save_path: str = "evaluation_results.json"):
         """
         Save evaluation results to a JSON file.
         
@@ -212,6 +282,8 @@ class ModelEvaluator:
             'confidence_threshold': self.confidence_threshold,
             'metrics': self.evaluation_results
         }
+
+        self.db_client.insert_one(results)
         
         with open(save_path, 'w') as f:
             json.dump(results, f, indent=4)
