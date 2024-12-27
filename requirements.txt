@@ -12,3 +12,4 @@ matplotlib
 albumentations
 plotly
 pandas
+logging

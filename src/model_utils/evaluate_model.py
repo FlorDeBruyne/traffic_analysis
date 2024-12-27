@@ -18,7 +18,7 @@ class ModelEvaluator:
             model_path (str): Path to the YOLO model weights
             confidence_threshold (float): Confidence threshold for predictions
         """
-        self.model = YOLO(model_path)
+        self.model = YOLO(model_path, task="detect")
         self.confidence_threshold = confidence_threshold
         self.evaluation_results = {}
         self.predictions = []
@@ -59,7 +59,6 @@ class ModelEvaluator:
                 ground_truth[image_id]['boxes'].append([x, y, x + w, y + h])
                 for category in coco_data['categories']:
                     if category['id'] == ann['category_id']:
-
                         ground_truth[image_id]['classes'].append((category['id'], category['name']))
         
         # Prepare a list of ground truth dictionaries
@@ -133,6 +132,7 @@ class ModelEvaluator:
             for gt, pred in zip(ground_truth, predictions):
                 gt_mask = np.array([cls[0] for cls in gt['classes']]) == class_id
                 pred_mask = np.array(pred['classes']) == class_id
+                print(f"this is gt_mask: {gt_mask}\n this is pred_mask: {pred_mask}")
 
                 # Add ground truth
                 for _ in range(sum(gt_mask)):
@@ -145,11 +145,11 @@ class ModelEvaluator:
                         y_pred.append(0)
                         y_scores.append(0)
                 
-                # Add false positives
-                for conf in pred['confidence'][pred_mask][sum(gt_mask):]:
-                    y_true.append(0)
-                    y_pred.append(1)
-                    y_scores.append(conf)
+                # # Add false positives
+                # for conf in pred['confidence'][pred_mask][sum(gt_mask):]:
+                #     y_true.append(0)
+                #     y_pred.append(1)
+                #     y_scores.append(conf)
             
             if len(y_true) > 0:
                 precision = precision_score(y_true, y_pred)
@@ -160,17 +160,17 @@ class ModelEvaluator:
                 precisions, recalls, _ = precision_recall_curve(y_true, y_scores)
                 auc_score = auc(recalls, precisions)
                 
-                metrics['per_class'][str(class_name)] = {
-                    'accuracy': accuracy_score(y_true, y_pred),
-                    'mean_ap': self._calculate_map(y_true, y_pred),
-                    'average_iou': self._calculate_average_iou(y_true, y_pred),
-                    'mean_squared_error': mean_squared_error(y_true, y_pred),
-                    'auc': auc_score(precisions, recalls),
-                    'precision': precision,
-                    'recall': recall,
-                    'f1': f1,
-                    'auc': auc_score
-                }
+                # metrics['per_class'][str(class_name)] = {
+                #     'accuracy': accuracy_score(y_true, y_pred),
+                #     'mean_ap': self._calculate_map(y_true, y_pred),
+                #     'average_iou': self._calculate_average_iou(y_true, y_pred),
+                #     'mean_squared_error': mean_squared_error(y_true, y_pred),
+                #     'auc': auc_score(precisions, recalls),
+                #     'precision': precision,
+                #     'recall': recall,
+                #     'f1': f1,
+                #     'auc': auc_score
+                # }
                 
                 overall_true.extend(y_true)
                 overall_pred.extend(y_pred)
@@ -300,7 +300,8 @@ class ModelEvaluator:
         Calculate mean Average Precision.
         """
         aps = []
-        for class_id in np.unique(np.concatenate([[cls[0] for cls in gt['classes'] for gt in ground_truth])):
+        print(ground_truth)
+        for class_id in np.unique(np.concatenate([[cls[0] for cls in gt['classes']] for gt in ground_truth])):
             y_true = []
             y_scores = []
             
