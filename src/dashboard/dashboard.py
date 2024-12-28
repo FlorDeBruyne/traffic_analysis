@@ -75,24 +75,45 @@ def load_time_metrics(collection_name):
         df['confidence_max'] = df['confidence_metrics'].apply(lambda x: x['max'])
         df['confidence_min'] = df['confidence_metrics'].apply(lambda x: x['min'])
         
-        # Convert timestamp using custom parser
-        df['time_stamp'] = df['time_stamp'].apply(parse_custom_timestamp)
-        
-        # Create a sort key before formatting the display timestamp
-        df['sort_key'] = df['time_stamp']
-        
-        # Group by time period using timestamp components
+        # Handle different time periods using their explicit fields
         if 'daily' in collection_name.lower():
-            df['time_stamp'] = df['time_stamp'].dt.strftime('%Y-%m-%d')
+            # Extract year and month from timestamp for daily data
+            df['year'] = df['time_stamp'].apply(lambda x: '20' + x.split('_')[0])
+            df['month'] = df['time_stamp'].apply(lambda x: x.split('_')[1])
+            # Use explicit day field
+            df['day'] = df['day'].astype(str).str.zfill(2)
+            
+            # Create proper datetime for sorting
+            df['sort_key'] = pd.to_datetime(
+                df['year'] + '-' + 
+                df['month'].str.zfill(2) + '-' + 
+                df['day']
+            )
+            # Create display string (just the date)
+            df['display_time'] = df['day']
+            
         elif 'monthly' in collection_name.lower():
-            df['time_stamp'] = df['time_stamp'].dt.strftime('%B')
-            df['sort_key'] = df['sort_key'].dt.strftime('%m')
+            # Use explicit month field
+            month_names = {
+                1: 'January', 2: 'February', 3: 'March', 4: 'April',
+                5: 'May', 6: 'June', 7: 'July', 8: 'August',
+                9: 'September', 10: 'October', 11: 'November', 12: 'December'
+            }
+            # Create sort key with year for proper sorting
+            year = df['time_stamp'].apply(lambda x: '20' + x.split('_')[0])
+            month = df['month'].astype(str).str.zfill(2)
+            df['sort_key'] = pd.to_datetime(year + '-' + month + '-01')
+            # Display string (just month name)
+            df['display_time'] = df['month'].map(month_names)
+            
         elif 'yearly' in collection_name.lower():
-            df['time_stamp'] = df['time_stamp'].dt.strftime('%Y')
-            df['sort_key'] = df['sort_key'].dt.strftime('%Y')
+            # Convert to full year number (assuming 20xx)
+            df['display_time'] = df['year'].apply(lambda x: f"20{x:02d}")
+            # Create sort key
+            df['sort_key'] = pd.to_datetime(df['display_time'] + '-01-01')
             
         # Aggregate data by timestamp and class_name
-        df = df.groupby(['time_stamp', 'class_name']).agg({
+        df = df.groupby(['display_time', 'class_name']).agg({
             'detections_count': 'sum',
             'confidence_avg': 'mean',
             'confidence_max': 'max',
@@ -187,6 +208,7 @@ with col2:
         st.plotly_chart(fig_speed)
 
 # In the metrics section:
+st.header("Evaluation Metrics")
 if not eval_df.empty:
     col1, col2, col3 = st.columns(3)
 
@@ -252,18 +274,22 @@ with col1:
         # Detection count over time
         fig_det = px.bar(
             time_df,
-            x='time_stamp',
+            x='display_time',
             y='detections_count',
             color='class_name',
             title=f"Detection Count Over Time"
         )
-        fig_det.update_layout(bargap=0.2) 
-        if 'monthly' in time_period.lower():
-            fig_det.update_xaxes(title="Month", categoryorder='array', categoryarray=sorted(time_df['time_stamp'].unique()))
-            fig_det.update_layout(bargap=0.2) 
-        elif 'yearly' in time_period.lower():
-            fig_det.update_xaxes(title="Year", categoryorder='array', categoryarray=sorted(time_df['time_stamp'].unique()))
-            fig_det.update_layout(bargap=0.2) 
+        fig_det.update_layout(
+            bargap=0.2,
+            xaxis_title=time_period.lower().rstrip('ly'),  # Convert "Daily" to "day", "Monthly" to "month", etc.
+            xaxis={
+                'categoryorder': 'array', 
+                'categoryarray': sorted(time_df['display_time'].unique(), 
+                                   key=lambda x: time_df.loc[time_df['display_time'] == x, 'sort_key'].iloc[0]),
+                'dtick': 1,  # Force whole number intervals
+                'type': 'category'  # Treat x-axis as categorical
+            }
+        )
         st.plotly_chart(fig_det)
 
 with col2:
@@ -271,15 +297,33 @@ with col2:
         # Confidence trends
         fig_conf_trend = px.line(
             time_df,
-            x='time_stamp',
+            x='display_time',
             y=['confidence_avg', 'confidence_max', 'confidence_min'],
             title="Confidence Metrics Over Time"
         )
-        if 'monthly' in time_period.lower():
-            fig_conf_trend.update_xaxes(title="Month", categoryorder='array', categoryarray=sorted(time_df['time_stamp'].unique()))
-        elif 'yearly' in time_period.lower():
-            fig_conf_trend.update_xaxes(title="Year", categoryorder='array', categoryarray=sorted(time_df['time_stamp'].unique()))
+        fig_conf_trend.update_layout(
+            xaxis_title=time_period.lower().rstrip('ly'),
+            xaxis={
+                'categoryorder': 'array', 
+                'categoryarray': sorted(time_df['display_time'].unique(), 
+                                   key=lambda x: time_df.loc[time_df['display_time'] == x, 'sort_key'].iloc[0]),
+                'dtick': 1,  # Force whole number intervals
+                'type': 'category'  # Treat x-axis as categorical
+            },
+            yaxis_range=[0, 1]
+        )
         st.plotly_chart(fig_conf_trend)
+
+# Add debug information to help troubleshoot
+if st.checkbox("Show Debug Information about time metrics"):
+    st.write("Time Metrics DataFrame:")
+    st.write("Sort Keys:")
+    st.write(pd.DataFrame({
+        'Display Time': time_df['display_time'],
+        'Sort Key': time_df['sort_key']
+    }).drop_duplicates().sort_values('Sort Key'))
+    st.write("\nFull Time Metrics DataFrame:")
+    st.write(time_df)
 
 
 if st.checkbox("Show Debug Information"):
