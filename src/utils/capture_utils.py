@@ -6,7 +6,7 @@ def run_streamlit():
     """
     Run the Streamlit app from within the Capture file.
     """
-    os.system("streamlit run /home/flor/traffic_analysis/src/dashboard/dashboard.py")
+    os.system("streamlit run dashboard/dashboard.py")
 
 def main():
     run_streamlit()
