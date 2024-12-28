@@ -1,0 +1,15 @@
+numpy
+opencv-python
+Pillow
+streamlit
+pymongo
+ssh-pymongo
+python-dotenv
+tqdm
+ultralytics
+scikit-learn
+matplotlib
+albumentations
+plotly
+pandas
+logging

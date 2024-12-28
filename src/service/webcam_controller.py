@@ -7,11 +7,11 @@ from datetime import datetime
 from collections import deque
 import time, threading
 
-from service.Inference import Inference
-from service.DataService import DataService
+from service.inference_service import Inference
+from service.data_service import DataService
 
 load_dotenv()
-data = DataService()
+data = DataService(client="traffic_analysis")
 inf = Inference()
 
 def threaded(fn):
@@ -34,6 +34,9 @@ class WebcamController():
         
 
     def camera_setup(self):
+        """
+        Setup up the webcam settings
+        """
         assert cv.VideoCapture(self.device_id), "The input source is not accesible"
         capture = cv.VideoCapture(self.device_id)
 
@@ -66,7 +69,7 @@ class WebcamController():
             for detection, unannotated_frame, annotated_frame, objects in inf.detect(frame):
                 if detection:
                     # Store the detected data
-                    data.store_data([unannotated_frame, annotated_frame], objects)
+                    data.process_objects([unannotated_frame, annotated_frame], objects)
 
                 # Display the annotated frame
                 cv.imshow("Frame", annotated_frame)
