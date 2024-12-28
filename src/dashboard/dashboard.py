@@ -207,12 +207,57 @@ with col2:
         fig_speed.update_traces(textfont_size=20, textangle=0, textfont=dict(weight='bold'))
         st.plotly_chart(fig_speed)
 
-# In the metrics section:
+# Evaluation Metrics Section
 st.header("Evaluation Metrics")
 if not eval_df.empty:
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3 = st.columns([1, 1, 1])  # Adjust column widths
 
     with col1:
+        metrics = ['accuracy', 'mean_ap', 'precision', 'recall', 'f1']
+        available_metrics = [m for m in metrics if m in eval_df.columns]
+        if available_metrics:
+            # Convert metric columns to numeric
+            for metric in available_metrics:
+                eval_df[metric] = pd.to_numeric(eval_df[metric], errors='coerce')
+
+            metrics_fig = px.line(
+                eval_df,
+                y=available_metrics,
+                title="Model Metrics Over Time"
+            )
+            metrics_fig.update_xaxes(title="Date")
+            metrics_fig.update_layout(
+                xaxis_tickangle=-45,
+                yaxis_range=[0, 1]
+            )
+            st.plotly_chart(metrics_fig)
+
+    with col2:
+        # Split metrics into two groups
+        st.subheader("Latest Metrics")
+        latest_eval = eval_df.iloc[-1]
+        metrics_to_display = {
+            'Accuracy': 'accuracy',
+            'mAP': 'mean_ap',
+            'Precision': 'precision',
+            'Recall': 'recall',
+            'F1': 'f1',
+            'IoU': 'average_iou'
+        }
+
+        col2a, col2b = st.columns(2)  # Split column into two parts
+
+        with col2a:
+            for label, metric in list(metrics_to_display.items())[:3]:  # First 3 metrics
+                if metric in latest_eval and pd.notna(latest_eval[metric]):
+                    st.metric(f"Latest {label}", f"{latest_eval[metric]:.3f}")
+
+        with col2b:
+            for label, metric in list(metrics_to_display.items())[3:]:  # Remaining metrics
+                if metric in latest_eval and pd.notna(latest_eval[metric]):
+                    st.metric(f"Latest {label}", f"{latest_eval[metric]:.3f}")
+
+    with col3:
         if 'precision' in eval_df.columns and 'recall' in eval_df.columns:
             fig_pr = px.scatter(
                 eval_df,
@@ -227,42 +272,7 @@ if not eval_df.empty:
             )
             st.plotly_chart(fig_pr)
 
-    with col2:
-        metrics = ['accuracy', 'mean_ap', 'precision', 'recall', 'f1']
-        available_metrics = [m for m in metrics if m in eval_df.columns]
-        if available_metrics:
-            # Convert metric columns to numeric
-            for metric in available_metrics:
-                eval_df[metric] = pd.to_numeric(eval_df[metric], errors='coerce')
-                
-            metrics_fig = px.line(
-                eval_df,
-                # x='display_time',
-                y=available_metrics,
-                title="Model Metrics Over Time"
-            )
-            metrics_fig.update_xaxes(title="Date")
-            metrics_fig.update_layout(
-                xaxis_tickangle=-45,
-                yaxis_range=[0, 1]
-            )
-            st.plotly_chart(metrics_fig)
 
-    with col3:
-        if len(eval_df) > 0:
-            latest_eval = eval_df.iloc[-1]
-            metrics_to_display = {
-                'Accuracy': 'accuracy',
-                'mAP': 'mean_ap',
-                'Precision': 'precision',
-                'Recall': 'recall',
-                'F1': 'f1',
-                'IoU': 'average_iou'
-            }
-            
-            for label, metric in metrics_to_display.items():
-                if metric in latest_eval and pd.notna(latest_eval[metric]):
-                    st.metric(f"Latest {label}", f"{latest_eval[metric]:.3f}")
 
 
 # Time Metrics Section
@@ -314,25 +324,25 @@ with col2:
         )
         st.plotly_chart(fig_conf_trend)
 
-# Add debug information to help troubleshoot
-if st.checkbox("Show Debug Information about time metrics"):
-    st.write("Time Metrics DataFrame:")
-    st.write("Sort Keys:")
-    st.write(pd.DataFrame({
-        'Display Time': time_df['display_time'],
-        'Sort Key': time_df['sort_key']
-    }).drop_duplicates().sort_values('Sort Key'))
-    st.write("\nFull Time Metrics DataFrame:")
-    st.write(time_df)
+# # Add debug information to help troubleshoot
+# if st.checkbox("Show Debug Information about time metrics"):
+#     st.write("Time Metrics DataFrame:")
+#     st.write("Sort Keys:")
+#     st.write(pd.DataFrame({
+#         'Display Time': time_df['display_time'],
+#         'Sort Key': time_df['sort_key']
+#     }).drop_duplicates().sort_values('Sort Key'))
+#     st.write("\nFull Time Metrics DataFrame:")
+#     st.write(time_df)
 
 
-if st.checkbox("Show Debug Information"):
-    st.write("Evaluation Metrics DataFrame Info:")
-    st.write(eval_df.info(max_cols=25))
-    st.write("\nFirst few rows of evaluation metrics:")
-    st.write(eval_df.head())
+# if st.checkbox("Show Debug Information"):
+#     st.write("Evaluation Metrics DataFrame Info:")
+#     st.write(eval_df.info(max_cols=25))
+#     st.write("\nFirst few rows of evaluation metrics:")
+#     st.write(eval_df.head())
     
-    st.write("\nTime Metrics DataFrame Info:")
-    st.write(time_df.info(max_cols=25))
-    st.write("\nFirst few rows of time metrics:")
-    st.write(time_df.head())
+#     st.write("\nTime Metrics DataFrame Info:")
+#     st.write(time_df.info(max_cols=25))
+#     st.write("\nFirst few rows of time metrics:")
+#     st.write(time_df.head())
