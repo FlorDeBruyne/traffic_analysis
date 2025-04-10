@@ -250,50 +250,88 @@ class ImageProcessor:
         return Image.fromarray(transformed_image, mode='RGB')
 
     def _process_single_document(self, doc: Dict, output_dir: Path) -> Optional[Dict]:
-        """Process a single document with proper size handling"""
+        """
+        Process a single document with proper size handling and error recovery.
+        
+        Args:
+            doc: The document dictionary from MongoDB
+            output_dir: Base output directory path
+            
+        Returns:
+            Optional[Dict]: Processed document info or None if processing failed
+        """
         try:
+            # Extract base image with validation
             base_image = doc.get("base_image")
             if not base_image:
+                logger.warning(f"Document {doc.get('_id')} has no base_image field")
                 return None
 
+            # Extract document metadata with consistent field names
             doc_info = {
                 "class_name": doc.get("class_name", "UNKNOWN"),
                 "split": doc.get("split", "train"),
-                "timestamp": doc.get("time_stamp", "UNKNOWN"),
+                "timestamp": doc.get("timestamp") or doc.get("time_stamp", "UNKNOWN"),
                 "bbox": doc.get("xywh", [0, 0, 0, 0]),
                 "image_id": doc.get("_id")
             }
+            
+            # Validate required fields
+            if not doc_info["class_name"] or doc_info["class_name"] == "UNKNOWN":
+                logger.warning(f"Document {doc_info['image_id']} has unknown class name")
+            
+            # Normalize split value
+            if doc_info["split"] not in ["train", "validation", "test"]:
+                logger.warning(f"Unknown split value '{doc_info['split']}' for {doc_info['image_id']}, defaulting to 'train'")
+                doc_info["split"] = "train"
 
             # Decode and process image
-            image_data = base64.b64decode(base_image)
-            with Image.open(BytesIO(image_data)) as img:
-                try:
-                    processed_img = self._preprocess_image(img, doc_info["split"])
+            try:
+                image_data = base64.b64decode(base_image)
+                with Image.open(BytesIO(image_data)) as img:
+                    # Record original format for potential future use
+                    original_format = img.format or "JPEG"
+                    
+                    try:
+                        # Apply preprocessing with specific error handling
+                        processed_img = self._preprocess_image(img, doc_info["split"])
+                    except Exception as e:
+                        logger.error(f"Image preprocessing failed for {doc_info['image_id']}: {e}")
+                        # Fallback to simple resize but still continue
+                        processed_img = self._maintain_aspect_ratio(img)
 
-                except Exception as e:
-                    logger.error(f"Image preprocessing failed: {e}")
-                    processed_img = self._maintain_aspect_ratio(img)  # Fallback to simple resize
-
-                # Save image with original dimensions
-                class_dir = output_dir / doc_info["class_name"] / doc_info["split"]
-                class_dir.mkdir(parents=True, exist_ok=True)
-                
-                file_name = f"base_{doc_info['timestamp']}_id_{doc_info['image_id']}.png"
-                file_path = class_dir / file_name
-                
-                # Save with high quality
-                processed_img.save(file_path, format="PNG", quality=100)
-                
-                doc_info.update({
-                    "file_name": str(file_path),
-                    "height": processed_img.height,
-                    "width": processed_img.width
-                })
-
-            return doc_info
+                    # Create class directory structure
+                    class_dir = output_dir / doc_info["class_name"] / doc_info["split"]
+                    class_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # Create relative file path for portability
+                    file_name = f"{doc_info['class_name']}_{doc_info['timestamp']}_{doc_info['image_id']}.{self.image_format.lower()}"
+                    file_path = class_dir / file_name
+                    rel_path = file_path.relative_to(output_dir)
+                    
+                    # Save with configured quality
+                    processed_img.save(
+                        file_path, 
+                        format=self.image_format, 
+                        quality=self.image_quality
+                    )
+                    
+                    # Update document with processed image info
+                    doc_info.update({
+                        "file_name": str(rel_path),  # Store relative path for portability
+                        "height": processed_img.height,
+                        "width": processed_img.width,
+                        "original_format": original_format
+                    })
+                    
+                    return doc_info
+                    
+            except (base64.binascii.Error, IOError) as e:
+                logger.error(f"Image decoding/loading failed for {doc_info['image_id']}: {e}")
+                return None
 
         except Exception as e:
-            logger.error(f"Failed to process document: {e}")
+            logger.error(f"Failed to process document {doc.get('_id', 'unknown')}: {e}")
             return None
 
 
